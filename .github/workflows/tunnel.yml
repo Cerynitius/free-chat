@@ -1,0 +1,92 @@
+name: Tunnel
+
+# 代理跑在 GitHub Actions runner 上 —— 公开仓库的 Actions 不收钱，
+# 于是「代理必须待在一台你自己的机器上」这个依赖就没有了。
+#
+# 前面挂一条 Cloudflare 隧道对外暴露，隧道地址写进 runtime 分支的 tunnel-url 文件。
+# Worker 通过 UPSTREAM_POINTER 读那个文件，所以隧道换地址时
+# 不用重新部署任何东西 —— Worker 30 秒内自己跟上。
+#
+# 调度：每 4 小时起一次，单次最多跑 5.5 小时 —— 下一轮会在上一轮结束前接上，不留空窗。
+
+on:
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tunnel
+  cancel-in-progress: false
+
+jobs:
+  tunnel:
+    name: 代理 + 隧道
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: 装 cloudflared
+        run: |
+          curl -sSL -o cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/cloudflared
+          cloudflared --version
+
+      - name: 起本地代理
+        env:
+          API_KEY: ${{ secrets.VITE_API_KEY }}
+        run: |
+          node proxy/server.mjs > proxy.log 2>&1 &
+          echo $! > proxy.pid
+          sleep 3
+          curl -sS --max-time 30 http://127.0.0.1:8787/__ping | head -20
+
+      - name: 起隧道
+        id: tunnel
+        run: |
+          cloudflared tunnel --url http://127.0.0.1:8787 --no-autoupdate > tunnel.log 2>&1 &
+          echo $! > tunnel.pid
+          for i in $(seq 1 30); do
+            grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' tunnel.log | head -1 > tunnel-url.txt || true
+            [ -s tunnel-url.txt ] && break
+            sleep 2
+          done
+          if [ ! -s tunnel-url.txt ]; then
+            echo '隧道没起来'; cat tunnel.log; exit 1
+          fi
+          URL=$(cat tunnel-url.txt)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "隧道地址: $URL"
+
+      - name: 把隧道地址写进 runtime 分支
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.tunnel.outputs.url }}
+        run: |
+          # 用 Contents API 写 —— 单文件、专用分支，不用在主工作区里折腾 git 分支
+          PAYLOAD=$(printf '{"message":"chore: 更新隧道地址","branch":"runtime","content":"%s"}' \
+            "$(printf '%s' "$URL" | base64 -w0)")
+          curl -sS -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/tunnel-url?ref=runtime" \
+            -d "$PAYLOAD" | head -20
+
+      - name: 保持进程活着
+        run: |
+          # 代理和隧道要一直活着，直到这一轮 job 到点
+          while true; do
+            sleep 300
+            if ! kill -0 "$(cat proxy.pid)" 2>/dev/null; then echo '代理挂了'; exit 1; fi
+            if ! kill -0 "$(cat tunnel.pid)" 2>/dev/null; then echo '隧道挂了'; exit 1; fi
+          done

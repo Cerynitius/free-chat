@@ -78,6 +78,40 @@ function resolveConfig(env) {
 }
 
 /**
+ * 上游地址可以来自「指针」—— 一个公开可读的文本文件，里面写着当前隧道地址。
+ *
+ * 为什么需要：隧道地址每次重启都会变。如果把它写死在构建产物里，
+ * 换一次隧道就要重新部署一次。改成运行时去读一个指针文件，
+ * 换隧道只要更新那个文件，Worker 自己就跟上（见 UPSTREAM_POINTER）。
+ */
+let pointerCache = { url: '', at: 0 }
+const POINTER_TTL_MS = 30_000
+
+async function resolveUpstream(env, config) {
+  const pointer = String(env.UPSTREAM_POINTER || '').trim()
+  if (!pointer) return config.upstream
+
+  const now = Date.now()
+  if (pointerCache.url && now - pointerCache.at < POINTER_TTL_MS) return pointerCache.url
+
+  try {
+    // 带分钟级时间戳，绕开 raw 的 5 分钟缓存
+    const bust = Math.floor(now / 60000)
+    const sep = pointer.includes('?') ? '&' : '?'
+    const res = await fetch(pointer + sep + 't=' + bust, { headers: { 'Cache-Control': 'no-cache' } })
+    if (!res.ok) throw new Error('pointer HTTP ' + res.status)
+    const text = (await res.text()).trim()
+    if (!/^https?:\/\//i.test(text)) throw new Error('pointer does not contain a URL')
+    pointerCache = { url: text.replace(/\/+$/, ''), at: now }
+    return pointerCache.url
+  } catch (err) {
+    // 指针读不到就沿用上次的结果，别让整条代理挂掉
+    console.warn('[proxy] 读上游指针失败：', err && err.message ? err.message : err)
+    return pointerCache.url || config.upstream
+  }
+}
+
+/**
  * 组装 CORS 头。
  *
  * 白名单为空 = 放行全部，回 '*'。
@@ -289,6 +323,7 @@ async function fetchUpstream(url, init, request) {
  */
 export async function handleRequest(request, env) {
   const config = resolveConfig(env)
+  const upstream = await resolveUpstream(env, config)
   const cors = buildCorsHeaders(request.headers.get('Origin'), config.allowedOrigins)
   const url = new URL(request.url)
   const path = normalizePath(url.pathname)
@@ -300,7 +335,7 @@ export async function handleRequest(request, env) {
   }
 
   if (path === '/__ping') {
-    return handlePing(request, config, cors)
+    return handlePing(request, { ...config, upstream }, cors)
   }
 
   if (!ALLOWED_PATHS.includes(path)) {
@@ -316,7 +351,7 @@ export async function handleRequest(request, env) {
     )
   }
 
-  const upstreamUrl = config.upstream + path + url.search
+  const upstreamUrl = upstream + path + url.search
   const init = {
     method: request.method,
     headers: buildUpstreamHeaders(request, config),
