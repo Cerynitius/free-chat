@@ -13,15 +13,14 @@ Do not paste an API key into an issue, a pull request, a discussion, a screensho
 
 ## Where the API key can live
 
-There are three places the upstream key can be stored, with very different exposure profiles:
+There are two places the upstream key can be stored, with very different exposure profiles:
 
 | Location | How it is set | Who can read it |
 |---|---|---|
-| Browser `localStorage` | Typed into the settings panel at runtime | Anyone with access to that browser or its profile. This is the direct-connection mode. |
 | Worker secret | `npx wrangler secret put API_KEY` on Cloudflare Workers, or the equivalent on other platforms | Nobody outside the platform. The proxy injects it server-side on every upstream request. **Recommended.** |
 | Build-time repository secret | The `VITE_API_KEY` repository secret, injected by the deployment workflow during the build | Everyone. The value is compiled into the JavaScript bundle that is published to the public internet. |
 
-In proxy mode the frontend sends no `Authorization` header at all. It asks the proxy whether it holds a key and only falls back to sending its own when the proxy reports that it has none. This is the configuration to prefer for any public deployment.
+The frontend always sends the Authorization header. When the proxy holds its own key it overrides whatever the browser sent, so the two never conflict. The configuration to prefer for any public deployment is still the proxy: its key never reaches the browser at all.
 
 ## A key compiled into a web page is published
 

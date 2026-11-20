@@ -9,14 +9,16 @@
 ![部署 GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![一键部署到 Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
-一个 DeepSeek 风格的流式对话前端，接的是 OpenAI 兼容的 SSE 接口，带独立思考面板、代码高亮、KaTeX 公式，手机和桌面都能用。
+一个给 `dsv4-flash` 用的开箱即用流式对话客户端，带独立可折叠的思考面板、代码高亮、KaTeX 公式，手机和桌面都能用。
 
 <a id="intro"></a>
 ## 项目简介
 
-**Hippocrene's Model Chat** 是一个单页对话客户端，对接 OpenAI 兼容的流式接口。界面参照 DeepSeek.com：桌面上是常驻侧边栏，手机上是底部抽屉，答案流式吐字时右下角有闪烁光标，模型的思考过程单独放在一个可折叠面板里，与正文分开显示。
+**Hippocrene's Model Chat** 是一个单页对话客户端，只服务一个模型：`dsv4-flash`（DeepSeek-V4-Flash-0731-CRACK），在 `https://182.92.245.176:1920` 上。界面参照 DeepSeek.com：桌面上是常驻侧边栏，手机上是抽屉，答案流式吐字时右下角有闪烁光标，模型的思考过程单独放在一个可折叠面板里，与正文分开显示。
 
-它对接的上游是 `https://182.92.245.176:1920` 上的 `dsv4-flash`（DeepSeek-V4-Flash-0731-CRACK）。这个接口用 Server-Sent Events 讲 OpenAI 的 chat-completions 协议，用 `curl` 完全正常，但它一个 CORS 响应头都不给，浏览器页面没法直接调。所以仓库里带了一份零依赖的反向代理，放在 `proxy/` 目录下，专门解决浏览器需要的三件事：自己应答 CORS 预检、在服务端注入 API key、把 SSE 原样流式透传。
+没有配置界面，也没有模型选择器。源站地址、模型 id、API key、采样参数、默认思考档位全部写在 `src/config.ts` 里，那是唯一的真相源。运行时只有两样东西还能调：主题和思考档位。界面文案目前是中文的。
+
+上游用 Server-Sent Events 讲 OpenAI 的 chat-completions 协议，用 `curl` 完全正常，但它一个 CORS 响应头都不给，浏览器页面没法直接调。所以仓库里带了一份零依赖的反向代理，放在 `proxy/` 目录下，专门解决浏览器需要的三件事：自己应答 CORS 预检、在服务端注入 API key、把 SSE 原样流式透传。
 
 这个仓库里全是静态的东西：构建产物就是纯 HTML、CSS 和 JavaScript，扔到 GitHub Pages 或者任意静态服务器都能跑。没有自带的后端，没有数据库，也没有账号体系。
 
@@ -25,21 +27,17 @@
 
 | 分类 | 能力 |
 |---|---|
-| 流式输出 | SSE 流式返回，带打字光标；分片攒到每秒 12 次刷新，长答案也不卡 |
-| 思考过程 | `reasoning_content` 单独渲染成可折叠面板，与正文分开，显示「已思考 X.X 秒」 |
-| 思考档位 | 关闭 / 无 / 低 / 高 / 极限五档，作为 `reasoning_effort` 发送；服务端默认是 `low` |
+| 流式输出 | SSE 流式返回，带打字光标；分片攒到每秒十二次左右刷新，长答案也不卡 |
+| 思考过程 | `reasoning_content` 单独渲染成可折叠面板，与正文分开，并报出模型想了多少秒 |
+| 思考档位 | 关闭 / 无 / 低 / 高 / 极限五档，就选在输入框左下角那个 chip 里，作为 `reasoning_effort` 发送；默认是 `low` |
 | 上下文 | 每次请求把完整的多轮历史一起发回去 |
 | Markdown | 支持 GitHub 风格 Markdown（含表格），用 `markdown-it` 渲染，DOMPurify 消毒 |
 | 代码 | 14 种语言的语法高亮，每个代码块都带一个能用的复制按钮 |
 | 数学公式 | KaTeX 渲染，行内 `$...$` 与独立成块的 `$$...$$` 都支持 |
-| 消息操作 | 重新生成、随时停止生成、复制回答、把整段会话导出为 Markdown |
+| 消息操作 | 重新生成、随时停止生成、复制回答 |
 | 本地历史 | 会话存在本地，按今天 / 昨天 / 本周 / 更早分组，支持新建与删除 |
-| 设置面板 | 连接方式、代理地址、源站地址、API key、模型、思考档位、temperature、top_p、max_tokens、系统提示词、主题、字号 |
-| 诊断 | 连接测试，加上对 `/__ping` 的代理自检，报延迟、报代理手里有没有 key |
-| 主题 | 浅色 / 深色 / 跟随系统 |
+| 主题 | 浅色 / 深色 / 跟随系统，侧栏底部一个图标按钮就能切 |
 | 布局 | 桌面常驻侧边栏，手机抽屉，移动端用 `visualViewport` 适配软键盘 |
-| 用量条 | 基于客户端估算的上下文 token 用量条 |
-| 分享 | 会话编码进 URL hash，共享完全不需要后端 |
 | 响应式 | 一套布局，从窄屏手机一直适配到宽屏桌面 |
 
 明确不做：tool calling（服务端不支持）、图片输入（这个 API 没有视觉能力）、多模型切换（只有一个模型）。
@@ -47,27 +45,27 @@
 <a id="quickstart"></a>
 ## 快速开始
 
-跑起来有三条路。第一条是最快看到效果的路。
-
-### 一、起本地代理（推荐第一次先走这条）
-
-代理是一份可移植、零依赖的 Node 服务，不用注册，也不用在任何地方开账号。
+克隆下来、装完依赖，就能开始聊。本地代理不用注册，也不用在任何地方开账号。
 
 ```bash
 git clone https://github.com/JiHuiYiYou/hippocrenes-model-chat.git
 cd hippocrenes-model-chat
 npm install
+```
 
-# Linux 与 macOS
+Linux 与 macOS：
+
+```bash
 API_KEY=sk-your-key npm run proxy
 ```
 
+Windows PowerShell：
+
 ```powershell
-# Windows PowerShell
 $env:API_KEY = "sk-your-key"; npm run proxy
 ```
 
-代理默认监听 `127.0.0.1:8787`，key 从 `API_KEY` 环境变量读。在碰前端之前先确认它是活的：
+代理默认监听 `127.0.0.1:8787`，key 从 `API_KEY` 环境变量读。开发模式下前端会自己指向这个地址，所以前端这边不用设任何环境变量。在打开页面之前先确认代理是活的：
 
 ```bash
 curl http://127.0.0.1:8787/__ping
@@ -79,20 +77,11 @@ curl http://127.0.0.1:8787/__ping
 npm run dev
 ```
 
-打开 `http://localhost:5173`，进设置面板，把连接方式选成**代理**，代理地址填 `http://127.0.0.1:8787`。点连接测试，源站应答之后顶部的状态点会变绿。
+打开 `http://localhost:5173`，直接开始打字聊天。整套流程就这三步：`npm install && npm run proxy && npm run dev`。
 
-### 二、本地开发
+只改界面的话前端自己也能跑，只是没起代理之前会报连接错误。
 
-```bash
-npm install
-npm run dev
-```
-
-开发服务器跑在 `http://localhost:5173`。聊天要用起来还是得有代理，所以把第一步的代理在另一个终端留着。只改界面的话前端自己也能跑，只是没配代理之前会报连接错误。
-
-### 三、部署到 GitHub Pages
-
-把仓库推到 GitHub，仓库里自带的 workflow 会自动发版。它负责构建站点、从仓库 secret 注入 key、把产物传到 Pages。
+要发布的话，把仓库推到 GitHub，仓库里自带的 workflow 会自动构建并发布。
 
 完整流程见[部署](#deploy)一节。
 
@@ -115,7 +104,21 @@ npm run dev
 | 采样参数 | 支持 `system` 角色、`temperature`、`top_p`、`stop`。 |
 | 工具调用 | 服务端不支持。 |
 
-服务端永远不报 token 用量，所以用量条只能是客户端估算：中文大约 1.6 个字一个 token，拉丁文大约 4 个字符一个 token。界面上始终标成「估算」，不装成精确值。
+服务端永远不报 token 用量，所以界面上干脆不显示任何用量计数 —— 没有可估的数，也就没有要显示的数。
+
+### 请求地址是从哪来的
+
+界面上没有「连哪个后端」这种选择。目标是构建期定下来的，直接进产物里：
+
+| 常量 | 来源 | 含义 |
+|---|---|---|
+| `BASE_URL` | 写死在 `src/config.ts` | 源站地址，`https://182.92.245.176:1920`。 |
+| `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理地址。填了就所有请求都走代理，留空就直接打源站。 |
+| `API_KEY` | `VITE_API_KEY` | Bearer 令牌。代理在服务端注入 key 时它可以是空的。 |
+| `MODEL` | 写死在 `src/config.ts` | `dsv4-flash`。 |
+| `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`4096` 和一个空的系统提示词。 |
+
+规则就一句话：**配了代理就走代理，没配浏览器就直接调源站。** 后一半只有在源站给了 CORS 头时才成立，而它没给。
 
 ### CORS 问题
 
@@ -158,7 +161,7 @@ npx wrangler secret put API_KEY     # 按提示输入 key
 npx wrangler deploy
 ```
 
-部署完会拿到一个 `https://<你的子域名>.workers.dev` 地址，填进**设置**里的代理地址。key 此刻在 Worker secret 里，浏览器完全接触不到。
+部署完会拿到一个 `https://<你的子域名>.workers.dev` 地址。把它填进仓库变量 `VITE_PROXY_URL` 再重新构建，之后前端就只找你的代理，不再直接打源站。key 此刻在 Worker secret 里，浏览器完全接触不到。
 
 [![一键部署到 Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
@@ -170,7 +173,7 @@ curl https://<你的子域名>.workers.dev/__ping
 
 #### C、直连源站（可选，需要管理员改 nginx）
 
-源站不改也能用 A 和 B。但如果想让浏览器直接调源站，把下面这段加到 `listen 1920 ssl;` 那个 server 块里：
+源站不改也能用 A 和 B。这一节只写给想让浏览器不靠代理直接访问源站的管理员，本仓库的任何部分都不依赖它。如果确实想让浏览器直接调源站，把下面这段加到 `listen 1920 ssl;` 那个 server 块里：
 
 ```nginx
     # 预检短路：server 级 if 在 rewrite 阶段执行，早于 access(鉴权) 阶段
@@ -212,15 +215,14 @@ curl -i -X OPTIONS https://182.92.245.176:1920/v1/chat/completions \
 
 编进网页里的 key 就是发布出去的 key。key 一旦写进 JavaScript bundle，任何人打开 DevTools 都能读出来，任何人下载 bundle 也能读出来。这事没法绕开：浏览器能发出去的东西，浏览器同样能让人看见。
 
-key 可以放在三个地方：
+key 可以放在两个地方：
 
 | 存放位置 | 浏览器能看见吗 | 建议 |
 |---|---|---|
-| 浏览器 `localStorage`（直连模式） | 能，拿到这台浏览器的人就能拿到 | 只用于本地开发 |
-| Worker secret（代理模式） | 不能。key 由服务端在每次上游请求时注入 | 推荐 |
+| Worker secret（代理模式） | 不能。key 由服务端在每次上游请求时注入，并且会覆盖客户端发来的那份 | 推荐 |
 | 构建期仓库 secret `VITE_API_KEY`（Pages） | 能。值会出现在公开的 bundle 里 | 只能接受，前提是定期轮换、权限收窄 |
 
-代理模式下前端压根不发 `Authorization` 头。它先问 `/__ping` 代理手里有没有 key，只有代理说自己没有的时候才退回用自己的。
+代理会在每次上游请求时注入 key，所以前端自己不需要 key。代理那边没配 key 的时候，客户端那份 `VITE_API_KEY` 头才会原样透传上去。
 
 不管走哪条路，都要定期轮换 key。已经躺进公开 bundle 里的 key，应当当成已经泄露处理。
 
@@ -232,8 +234,8 @@ key 可以放在三个地方：
 仓库自带一条自动构建发布的 workflow。
 
 1. **把仓库推到 GitHub。** 目标仓库是 `https://github.com/JiHuiYiYou/hippocrenes-model-chat`。
-2. **加仓库 secret。** 在**设置**、**Secrets and variables**、**Actions** 里新建一个仓库 secret，名字叫 `VITE_API_KEY`，把上游 key 填进去。这个 secret 在构建期注入，绝不会进仓库。
-3. **（可选）加仓库变量。** 新建一个仓库变量 `VITE_PROXY_URL`，填你的代理地址，例如 `https://hippocrenes-model-chat-proxy.<你的子域名>.workers.dev`。填了之后访客打开站点就是「已经配好」的可用状态，不用先进设置面板；只想靠 `VITE_API_KEY` 里那个 key 就够用的话，可以不填。
+2. **加仓库 secret。** 在仓库的**设置**、**Secrets and variables**、**Actions** 里新建一个仓库 secret，名字叫 `VITE_API_KEY`，把上游 key 填进去。这个 secret 在构建期注入，绝不会进仓库。
+3. **加仓库变量。** 新建一个仓库变量 `VITE_PROXY_URL`，填你的代理地址，例如 `https://hippocrenes-model-chat-proxy.<你的子域名>.workers.dev`。这是唯一决定构建产物往哪儿发请求的开关。不填的话，站点会直接调源站，而源站一个 CORS 头都不给，浏览器会把每个响应都丢掉。只有当你把站点部署在「能带着 CORS 头访问源站」的地方时，才可以不填。
 4. **启用 Pages。** workflow 用的是 `enablement: true`，第一次跑就会把站点建出来。也可以自己在**设置**、**Pages** 里手动选 GitHub Actions 作为来源。
 5. **推 `main` 分支。** `Deploy to GitHub Pages` 这条 workflow 会构建并发布，站点地址形如 `https://<用户名>.github.io/<仓库名>/`。
 
@@ -247,6 +249,12 @@ key 可以放在三个地方：
 API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 ```
 
+构建的时候把代理地址编进去，浏览器才会找代理而不是找源站：
+
+```bash
+VITE_PROXY_URL=https://proxy.example.com npm run build
+```
+
 前面再套一层做 TLS 终止的反向代理。整条链必须留在 HTTPS 上：HTTPS 加载的页面不允许调用 `http://` 的接口（混合内容），而且 key 会以明文过网络。
 
 ### 部署不做的事
@@ -254,26 +262,16 @@ API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 部署只发布静态文件。它不转发接口，不在服务端存会话，也不做限流。会话存在访客自己的浏览器里，唯一可能进浏览器的 key，只有你自己决定编译进去的那一个。
 
 <a id="settings"></a>
-## 设置项对照表
+## 可调项
 
-顶栏可以打开设置面板。界面目前是中文的，下表按功能列出每一项。
+没有配置界面。运行时能调的就两项，而且都能在界面上直接点到：
 
-| 设置项 | 默认值 | 说明 |
-|---|---|---|
-| 连接方式 | `proxy` | `proxy` 表示所有请求都走代理地址；`direct` 表示浏览器直接调源站，只有源站给了 CORS 头才用得了。 |
-| 源站地址 | `https://182.92.245.176:1920` | 上游基址，直连模式用。只能 https。 |
-| 代理地址 | 构建期的 `VITE_PROXY_URL`，默认为空 | 代理基址，代理模式用。本地 Node 代理是 `http://127.0.0.1:8787`，Worker 就是它的 `workers.dev` 地址。 |
-| API key | 空，回落到构建期的 `VITE_API_KEY` | Bearer 令牌。代理模式下可以留空，因为 key 由代理在服务端注入。运行时手输的会存进 `localStorage`。 |
-| 模型 | `dsv4-flash` | 请求体里带的模型标识。 |
-| 思考档位 | `low` | 取 `off`、`none`、`low`、`high`、`max`，作为 `reasoning_effort` 发送。 |
-| temperature | `0.7` | 采样温度，作为 `temperature` 发送。 |
-| top_p | `1` | 核采样截断值，作为 `top_p` 发送。 |
-| max_tokens | `4096` | 生成长度上限，作为 `max_tokens` 发送。 |
-| 系统提示词 | 空 | 非空时作为 `system` 消息插在最前面。 |
-| 主题 | `system` | `light`、`dark`，或者跟随操作系统。 |
-| 字号 | `md` | `sm`、`md`、`lg`，整体缩放界面。 |
+| 可调项 | 默认值 | 入口 | 说明 |
+|---|---|---|---|
+| 主题 | `system` | 侧栏底部的图标按钮 | `light`、`dark`，或者跟随操作系统。那个按钮在浅色和深色之间来回切。 |
+| 思考档位 | `low` | 输入框左下角的 chip | 取 `off`、`none`、`low`、`high`、`max`，作为 `reasoning_effort` 每次请求都带上。 |
 
-面板底部有两个按钮。**连接测试**会调一次模型列表接口并报延迟。**代理自检**探的是 `/__ping`，它会真的打到上游，报通不通、报延迟，还报代理手里有没有 key。
+其余参数全部写死在 `src/config.ts` 里，界面上不提供修改：源站地址、代理地址、API key、模型 id、`temperature`、`top_p`、`max_tokens`、系统提示词。想改其中任何一个，只能改那一个文件然后重新构建。
 
 <a id="design"></a>
 ## 设计系统
@@ -314,7 +312,7 @@ API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 | 衬线 | `Newsreader`、`Lyon Text`、`Songti SC`、`Source Han Serif SC`、`Noto Serif SC`、`Georgia`、`Times New Roman`、`serif` |
 | 等宽 | `Geist Mono Variable`、`SF Mono`、`JetBrains Mono`、`Cascadia Code`、`Consolas`、`PingFang SC`、`monospace` |
 
-拉丁文字和数字走 Geist，中文交给系统字体，两边都是几何无衬线，混排不打架。字体全部自托管，运行时不请求任何 CDN。正文字号 15 像素，行高 1.6。
+拉丁文字和数字走 Geist，中文交给系统字体，两边都是几何无衬线，混排不打架。字体全部自托管，运行时不请求任何 CDN。正文是 15 像素大小，行高 1.6。
 
 ### 形状、层次与动效
 
@@ -368,9 +366,10 @@ hippocrenes-model-chat/
 ├── src/
 │   ├── main.tsx          # 入口
 │   ├── App.tsx           # 应用外壳
+│   ├── config.ts         # 源站、模型、key、采样参数
 │   ├── styles.css        # 设计 token 与组件类
-│   ├── lib/              # api、chat、sse、markdown、hljs、tokens、
-│   │                     # storage、share、export、date、clipboard
+│   ├── lib/              # api、chat、sse、markdown、hljs、
+│   │                     # storage、theme、date、clipboard
 │   ├── state/            # store、三个 slice、类型、持久化
 │   └── ui/               # 展示型组件
 ├── proxy/
@@ -390,11 +389,11 @@ hippocrenes-model-chat/
 
 状态拆成三个 slice，共用一份类型模块，所以任何 slice 都不用 import 另一个 slice：
 
-- `settingsSlice` 放设置和连接状态，连接测试也在这里。
-- `chatSlice` 放会话和流式生命周期。收到的 SSE 分片先进缓冲，再以每秒 12 次的频率刷进 store，这样长答案不会每来一个 token 就重渲染一遍。
-- `uiSlice` 放侧边栏和面板的开关、滚动位置、未读计数和 toast。
+- `settingsSlice` 放两个运行时选项：主题和思考档位。
+- `chatSlice` 放会话和流式生命周期。收到的 SSE 分片先进缓冲，再以每秒十二次左右的频率刷进 store，这样长答案不会每来一个 token 就重渲染一遍。
+- `uiSlice` 放侧边栏的开关、滚动位置、未读计数和 toast。
 
-会话与设置持久化在 `localStorage` 的 `hippocrenes.chat.v1` 键下，写入有 400 毫秒防抖，最多留 50 条会话。
+会话与设置持久化在 `localStorage` 的 `hippocrenes.chat.v2` 键下，写入有 400 毫秒防抖，最多留 50 条会话。
 
 <a id="contribute"></a>
 ## 参与贡献

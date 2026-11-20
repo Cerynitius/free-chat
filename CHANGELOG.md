@@ -6,9 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- Nothing yet.
+- The project is now a chat client for exactly one model, `dsv4-flash`, and both READMEs say so. The generic OpenAI-compatible framing is gone.
+- The connection target is decided at build time instead of at runtime. `src/config.ts` is the single source of truth for the origin URL, the model id, the API key, the default reasoning effort, and the sampling parameters.
+- `VITE_PROXY_URL` selects the endpoint: when it is set every request goes through that proxy, when it is empty the request goes straight to the origin. In development an unset `VITE_PROXY_URL` falls back to `http://127.0.0.1:8787`, the local proxy, so a fresh clone runs with `npm install && npm run proxy && npm run dev`.
+- `VITE_API_KEY` injects the API key at build time. The repository holds no real value.
+- The settings panel is gone. Only the theme and the reasoning effort remain adjustable, and both are reachable directly from the interface: the theme from the icon button at the bottom of the sidebar, the reasoning effort from the chip at the bottom-left of the composer.
+- The reasoning effort chip now offers all five levels: off, none, low, high, and max.
+- The empty state is reduced to the product name. The onboarding guide, the introduction copy, and the suggested questions are gone.
+- The API key table in the READMEs now lists two locations instead of three, and the claim that the frontend probes `/__ping` before sending its own key was dropped: the proxy injects the key server-side and overrides whatever the client sent.
+- The README deployment chapter now tells you to set the repository variable `VITE_PROXY_URL` to the address of your proxy, instead of telling you to type a proxy address into the interface.
+
+### Removed
+
+- The whole settings panel: connection mode, proxy URL, origin URL, API key input, model name, temperature, top_p, max_tokens, system prompt, and font size.
+- The SetupGuide card that explained how to reach the service, together with its three deployment paths.
+- The connection status badge (untested, connected, latency) and the token usage bar.
+- The client-side token estimate that was shown under each message.
+- URL hash encoding of conversations, and the confirmation card that went with it.
+- Exporting a conversation as Markdown.
+- The model name label and the hint line under the composer.
+- The "connection not tested yet" notice.
 
 ## [0.1.0] - 2026-11-20
 

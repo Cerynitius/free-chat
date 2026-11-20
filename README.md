@@ -264,7 +264,7 @@ The deployment publishes static files only. It does not proxy the API, does not 
 <a id="settings"></a>
 ## Adjustable Options
 
-There is no settings panel. Two options are adjustable at runtime, and both are reachable directly from the interface:
+There is no configuration screen. Two options are adjustable at runtime, and both are reachable directly from the interface:
 
 | Option | Default | Where | Description |
 |---|---|---|---|
@@ -337,7 +337,7 @@ No gradients, no glow, no glassmorphism, and no emoji anywhere in the interface.
 | UI | React 19 with TypeScript 5.9 |
 | Build | Vite 8, with the React plugin and the Tailwind CSS v4 plugin |
 | Styling | Tailwind CSS v4 with a custom `@theme` block in `src/styles.css` |
-| State | Zustand 5, split into three slices over a shared type module |
+| State | Zustand 5, split into three slices over a common type module |
 | Markdown | `markdown-it` with DOMPurify sanitization |
 | Highlighting | `highlight.js`, restricted to 14 registered languages |
 | Math | KaTeX, with inline and display rules written as a custom plugin |
@@ -373,7 +373,7 @@ hippocrenes-model-chat/
 │   ├── state/            # store, three slices, types, persistence
 │   └── ui/               # presentational components
 ├── proxy/
-│   ├── handler.js        # shared core: CORS, key injection, SSE passthrough
+│   ├── handler.js        # common core: CORS, key injection, SSE passthrough
 │   ├── server.mjs        # Node runner
 │   ├── deno.ts           # Deno Deploy entry point
 │   ├── vercel/edge.ts    # Vercel Edge entry point
@@ -387,7 +387,7 @@ hippocrenes-model-chat/
 
 ### State layout
 
-State is split into three slices over a shared type module, so no slice has to import another one:
+State is split into three slices over a common type module, so no slice has to import another one:
 
 - `settingsSlice` holds the two runtime options, the theme and the reasoning effort.
 - `chatSlice` holds conversations and the streaming lifecycle. Incoming SSE frames are buffered and flushed to the store twelve times per second, which keeps a long answer from re-rendering the tree on every token.

@@ -73,10 +73,9 @@ export function extractCode(body: string): string | undefined {
  * 请求要么没发出去，要么响应根本没让 JS 看见。
  */
 export function describeConnectionError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err)
-  const hint = PROXY_URL
-    ? '检查代理地址与代理是否还在运行'
-    : '源站没有 CORS 头，浏览器会拦掉跨源请求 —— 需要配一个代理地址'
+  // 原始错误只进控制台 —— 界面上一行就够，堆细节反而看不清
   console.warn('[chat] 连接失败', err)
-  return `连不上服务 · ${hint}（${raw}）`
+  return PROXY_URL
+    ? '连不上代理 · 确认代理还在运行'
+    : '连不上源站 · 浏览器会拦掉跨源请求，需要配代理地址'
 }

@@ -32,8 +32,10 @@ the preflight itself, adds the CORS headers the upstream is missing, injects
 the API key from the server side, and streams the SSE response through
 untouched.
 
-The frontend already knows how to talk to it — switch the app to "proxy" mode
-and point it at the proxy's base URL.
+The frontend talks to it through one build-time variable: set `VITE_PROXY_URL`
+to the proxy's base URL and the app routes every request through it. Locally
+that variable defaults to `http://127.0.0.1:8787`, which is where
+`npm run proxy` listens.
 
 ---
 
