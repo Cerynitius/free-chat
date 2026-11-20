@@ -9,7 +9,7 @@
 ![部署 GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![一键部署到 Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
-这个 Cloudflare 按钮部署的是 Cloudflare Workers 版代理，**对当前这个上游不适用**：上游是裸 IP，证书只有 IP SAN，Workers 的边缘节点连不上。请改用隧道方案，详见[为什么这个代理跑不了在 Cloudflare Workers 上](#workers)。
+默认情况下代理托管在 GitHub Actions runner 上（公开仓库的 Actions 不收钱），GitHub Pages 上的站点则连一个地址固定的 Cloudflare Worker，由它跟着隧道走。这个 Cloudflare 按钮部署的就是那个 Worker 入口。跑不了在 Workers 上的是**代理本身**：上游是裸 IP，证书只有 IP SAN，Workers 的边缘节点连不上。详见[为什么这个代理跑不了在 Cloudflare Workers 上](#workers)。
 
 一个给 `dsv4-flash` 用的开箱即用流式对话客户端，带独立可折叠的思考面板、代码高亮、KaTeX 公式，手机和桌面都能用。
 
@@ -22,7 +22,7 @@
 
 上游用 Server-Sent Events 讲 OpenAI 的 chat-completions 协议，用 `curl` 完全正常，但它一个 CORS 响应头都不给，浏览器页面没法直接调。所以仓库里带了一份零依赖的反向代理，放在 `proxy/` 目录下，专门解决浏览器需要的三件事：自己应答 CORS 预检、在服务端注入 API key、把 SSE 原样流式透传。
 
-这个上游只能通过「TLS + 裸 IP」访问，证书里也只写了那个 IP，没有域名。仓库里所有部署上的限制都从这一条事实推出来：代理必须跑在一台有完整网络访问权的机器上，而 Cloudflare Workers 不是这样的地方。详见[为什么这个代理跑不了在 Cloudflare Workers 上](#workers)。
+这个上游只能通过「TLS + 裸 IP」访问，证书里也只写了那个 IP，没有域名。仓库里所有部署上的限制都从这一条事实推出来：代理必须跑在一台有完整网络访问权的机器上，而 Cloudflare Workers 不是这样的地方。详见[为什么这个代理跑不了在 Cloudflare Workers 上](#workers)。GitHub Actions runner 就是这样的地方：公开仓库的 Actions 不收钱，也不用你准备任何东西，所以默认就托管在那里。
 
 这个仓库里全是静态的东西：构建产物就是纯 HTML、CSS 和 JavaScript，扔到 GitHub Pages 或者任意静态服务器都能跑。没有自带的后端，没有数据库，也没有账号体系。
 
@@ -49,7 +49,9 @@
 <a id="quickstart"></a>
 ## 快速开始
 
-克隆下来、装完依赖，就能开始聊。本地代理不用注册，也不用在任何地方开账号。
+线上站点已经能用了。代理托管在 GitHub Actions runner 上，GitHub Pages 上的站点连的是一个地址固定的 Cloudflare Worker，所以什么都不用配，也不用注册任何账号：打开站点直接开始聊。
+
+想跑自己那份的话，克隆下来装完依赖就行。本地代理不用注册，也不用在任何地方开账号。
 
 ```bash
 git clone https://github.com/JiHuiYiYou/hippocrenes-model-chat.git
@@ -87,7 +89,7 @@ npm run dev
 
 只改界面的话前端自己也能跑，只是没起代理之前会报连接错误。
 
-### 让线上站点也能连上
+### 让线上站点连上你自己的机器
 
 上面那个代理只有你自己访问得到。要让 GitHub Pages 上的站点也能用到它，就用 Cloudflare 快速隧道把它暴露出去：
 
@@ -96,6 +98,8 @@ npm run tunnel
 ```
 
 `npm run tunnel` 会起本地代理、开一条 `cloudflared` 隧道，把拿到的 `https://<随机串>.trycloudflare.com` 地址写进仓库变量 `VITE_PROXY_URL`，再触发一次 Pages 重新部署。隧道地址每次重启都会变，站点会自动跟上。
+
+这条路绕开了 Worker 和 Actions runner：构建出来的站点直接连你的隧道，代价是这台机器得一直开着。
 
 它需要机器上有两样东西：
 
@@ -157,7 +161,7 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | 常量 | 来源 | 含义 |
 |---|---|---|
 | `BASE_URL` | 写死在 `src/config.ts` | 源站地址，`https://182.92.245.176:1920`。 |
-| `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理的公网地址。填了就所有请求都走代理，留空就直接打源站。 |
+| `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理的公网地址，默认那套里指的是 Worker 的地址。填了就所有请求都走代理，留空就直接打源站。 |
 | `API_KEY` | `VITE_API_KEY` | Bearer 令牌。代理在服务端注入 key 时它可以是空的。 |
 | `MODEL` | 写死在 `src/config.ts` | `dsv4-flash`。 |
 | `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`4096` 和一个空的系统提示词。 |
@@ -199,36 +203,68 @@ POST /v1/chat/completions  ->  同样零 CORS 头
 | IP 的其它写法：IPv4 映射的 IPv6、尾点、八进制、十六进制 | 一律 `1003`。边缘节点在校验之前就把地址归一化了。 |
 | 免费版上的 `cloudflare:sockets` | 普通 TCP 能连上，但 `secureTransport: 'on'` 会静默降级成明文，上游回 `400 The plain HTTP request was sent to HTTPS port`；`startTls()` 直接报错。sockets 上的 TLS 需要 Workers Paid 版。 |
 
-于是规矩很简单：**代理必须跑在一台有完整网络访问权的机器上** —— 普通容器或虚机都行。Workers 那套文件还留在 `proxy/` 里，上游换成有域名的服务时照样能用；对现在这个上游不适用。
+于是规矩很简单：**代理必须跑在一台有完整网络访问权的机器上** —— 普通容器或虚机都行。
 
+这否掉的是「把代理跑在 Workers 上」，不是「用 Worker 当入口」。Worker 只要能 fetch 一个正常的主机名就行，而隧道地址正是一个主机名。所以本仓库里 Worker 的角色是隧道前面那个地址固定的入口，而不是代理跑着的地方。详见[代理跑在哪](#hosting)。
+
+<a id="hosting"></a>
 ### 代理跑在哪
 
-三种放法，按值得尝试的顺序排。三种都不需要服务器管理员配合。
+三种放法，按值得尝试的顺序排。第一种不用注册账号、不用自己备机器，也一分钱不花。
 
-#### A、本机代理 + Cloudflare 快速隧道（零注册）
+#### A、GitHub Actions（默认，零成本零注册）
 
-线上站点现在跑的就是这条。整条链路是：
+代理跑在 GitHub Actions runner 上。公开仓库的 Actions 分钟数不收费，所以这条路不花钱，也不用你自己开账号。
+
+整条链路是：
 
 ```
-浏览器 -> GitHub Pages -> 隧道(trycloudflare.com) -> 本机代理 -> 源站
+浏览器 -> GitHub Pages -> Cloudflare Worker（地址固定） -> 隧道(trycloudflare.com) -> Actions runner 上的代理 -> 源站
 ```
 
-`npm run tunnel` 把整条链路串起来：起本地代理（`proxy/server.mjs`，key 从 `API_KEY` 读），起 `cloudflared tunnel --url http://127.0.0.1:8787`，从日志里解析出 `https://<随机串>.trycloudflare.com` 地址，用 `gh` 命令行把它写进仓库变量 `VITE_PROXY_URL`，再触发 Pages 部署。隧道地址每次重启都会变，站点自动跟上，手工不用改任何配置。
+`.github/workflows/tunnel.yml` 把整条链路串起来：每 4 小时起一次（`cron: 17 */4 * * *`），单次最多跑 5.5 小时（`timeout-minutes: 330`）。每一轮里它：
 
-前提是机器上有 `cloudflared` 二进制，以及装好并登录过的 `gh` 命令行（`gh auth login`）。下载命令见[快速开始](#quickstart)。
+1. 装 `cloudflared`；
+2. 起本地代理（`node proxy/server.mjs`，key 从仓库 secret `VITE_API_KEY` 读）；
+3. 开一条 `cloudflared tunnel --url http://127.0.0.1:8787`；
+4. 把拿到的 `https://<随机串>.trycloudflare.com` 地址写进 `runtime` 分支的 `tunnel-url` 文件；
+5. 让代理和隧道一直活着，直到这个 job 到点。
 
-在跑着的隧道上实测：
+runner 不接受假成功：工作流会探一次 `/__ping`，响应里没有 `"reachable": true` 就直接判失败。隧道起来了但打不通源站，不会被当成成功。
+
+`runtime` 是孤儿分支，里面只有那一个文件。
+
+`concurrency` 配的是 `group: tunnel` 加 `cancel-in-progress: true`，新一轮会取消上一轮。交接时会有几秒空窗，但新一轮不用排队等一个五小时的 job。
+
+##### Worker 是固定入口，隧道地址是指针
+
+隧道前面那个 Worker 的地址永远不变，所以隧道换地址时站点不用重新构建。`proxy/handler.js` 从一个「指针」读上游：`UPSTREAM_POINTER` 指向一个公开可读的文本文件，内容就是当前隧道地址，Worker 在运行时把它读下来当上游用。`proxy/wrangler.toml` 里指的是 `runtime` 分支上那个文件：
+
+```
+UPSTREAM_POINTER = "https://raw.githubusercontent.com/JiHuiYiYou/hippocrenes-model-chat/runtime/tunnel-url"
+```
+
+指针有 30 秒缓存，新的隧道地址半分钟内就能被 Worker 看到。指针读不到时，Worker 沿用上一次拿到的地址，不会因此整条代理挂掉。
+
+在前面这个 Worker 上实测：
 
 | 检查项 | 结果 |
 |---|---|
-| `GET /__ping` | `reachable: true`、`hasKey: true`，`latencyMs` 在 29 到 134 之间 |
-| CORS 预检 | `204`，带 `Access-Control-Allow-Origin: *` |
-| SSE 流 | 90 帧铺在 2745 毫秒到 3912 毫秒之间，是真流式，不是一坨攒完再吐 |
-| 线上站点 | 能正常对话 |
+| `GET /__ping` | `upstream` 显示当前隧道地址，`reachable: true`，`latencyMs` 在 1200 到 1600 之间 —— 链路比直连多一跳 |
+| Actions runner | 能连上源站；连不上时工作流会直接判失败 |
+| 线上站点 | 本机隧道和本机代理全杀掉之后，仍然能正常对话 |
 
-#### B、托管平台（Vercel 或 Deno Deploy）
+#### B、自己的服务器 / Vercel / Deno Deploy
 
-都有免费额度，但都要注册账号。
+比免费的 runner 更稳、更快。Vercel 和 Deno Deploy 都有免费额度，但要注册账号；自己的服务器则要你自己养着。
+
+自己的服务器上直接跑 Node 代理，前面再套一层做 TLS 终止的反向代理：
+
+```bash
+API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
+```
+
+整条链必须留在 HTTPS 上：HTTPS 加载的页面不允许调用 `http://` 的接口（混合内容），而且 key 会以明文过网络。
 
 Vercel 上要用 **Node** 运行时，不要用 Edge。Edge 函数跑在边缘节点，Node 函数跑在真容器里，只有真容器才能稳定直连裸 IP 的非标准端口。项目根目录就是 `proxy/` 目录，入口是 `proxy/api/[...path].js`，`proxy/vercel.json` 把所有路径改写到 `/api/:path*`。
 
@@ -247,15 +283,26 @@ deno deploy --project=<your-project> deno.ts
 
 在 Deno Deploy 控制台设 `UPSTREAM`、`API_KEY`、`ALLOWED_ORIGINS`。
 
-#### C、自己的服务器
+#### C、自己的电脑 + 隧道
 
-最稳的一种，长跑的服务选它。
+`npm run tunnel` 是「想把代理放在自己机器上」的人走的零注册路线：起本地代理、开一条 `cloudflared` 隧道、用 `gh` 命令行把隧道地址写进仓库变量 `VITE_PROXY_URL`，再触发 Pages 部署，于是线上站点就连到了你的机器：
 
-```bash
-API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
+```
+浏览器 -> GitHub Pages -> 隧道(trycloudflare.com) -> 本机代理 -> 源站
 ```
 
-前面再套一层做 TLS 终止的反向代理。整条链必须留在 HTTPS 上：HTTPS 加载的页面不允许调用 `http://` 的接口（混合内容），而且 key 会以明文过网络。
+前提是机器上有 `cloudflared` 二进制，以及装好并登录过的 `gh` 命令行（`gh auth login`）。下载命令见[快速开始](#quickstart)。
+
+隧道地址每次重启都会变，站点自动跟上，手工不用改任何配置。代价是这台机器得一直开着、连着网。
+
+在跑着的隧道上实测：
+
+| 检查项 | 结果 |
+|---|---|
+| `GET /__ping` | `reachable: true`、`hasKey: true`，`latencyMs` 在 29 到 134 之间 |
+| CORS 预检 | `204`，带 `Access-Control-Allow-Origin: *` |
+| SSE 流 | 90 帧铺在 2745 毫秒到 3912 毫秒之间，是真流式，不是一坨攒完再吐 |
+| 线上站点 | 能正常对话 |
 
 #### 附录：直连源站（可选，需要管理员改 nginx）
 
@@ -327,16 +374,26 @@ key 可以放在两个地方：
 
    | 代理跑在哪 | `VITE_PROXY_URL` 填什么 |
    |---|---|
+   | GitHub Actions（默认） | 隧道前面那个 Cloudflare Worker 的地址。它不会变，所以站点构建一次就一直有效。 |
    | 本机代理 + Cloudflare 快速隧道 | `npm run tunnel` 打出来的 `https://<随机串>.trycloudflare.com` 地址。脚本会自己把它写进这个变量。 |
    | Vercel | `https://<你的项目名>.vercel.app` |
    | Deno Deploy | `https://<你的项目名>.deno.dev` |
    | 自己的服务器 | `https://proxy.example.com`，也就是 TLS 终止反向代理对外的那个地址 |
 
    隧道地址是临时的：隧道一重启就换。`npm run tunnel` 会负责改写这个变量并重新部署站点，所以只要隧道还开着，站点就一直能用。
+
+   **代理托管在 Actions 上时，隧道地址根本不会进到构建产物里。** `VITE_PROXY_URL` 指的是 Worker，真正的上游由 Worker 在运行时通过 `UPSTREAM_POINTER` 去查（见[代理跑在哪](#hosting)）。新的隧道地址半分钟内就被 Worker 跟上，什么都不用重新部署 —— Worker 不用，站点也不用。
 4. **启用 Pages。** workflow 用的是 `enablement: true`，第一次跑就会把站点建出来。也可以自己在**设置**、**Pages** 里手动选 GitHub Actions 作为来源。
 5. **推 `main` 分支。** `Deploy to GitHub Pages` 这条 workflow 会构建并发布，站点地址形如 `https://<用户名>.github.io/<仓库名>/`。
 
 构建用的是相对路径基准（`./`），所以同一份 `dist/` 也能丢到任意静态服务器、本地磁盘，或者别的域名的子目录里跑。
+
+### Actions 托管代理的已知限制
+
+站点要连得上模型，`Tunnel` 这条 workflow 就得跑着。关于它有两件事值得知道：
+
+- **仓库 60 天没有活动，GitHub 会停掉定时工作流。** 连续 60 天没有任何活动，cron 就不再触发，隧道也就不会再起来。推一个 commit，或者到 **Actions** 标签页手动跑一次 `Tunnel`，就能把它救回来。
+- **每轮交接会有几秒空窗。** 新一轮会取消上一轮，隧道地址随之改变，Worker 得再去取一次新地址。落在这个窗口里的请求可能失败，窗口过后一切恢复正常。
 
 ### 自建部署
 
@@ -351,6 +408,8 @@ API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 ```bash
 VITE_PROXY_URL=https://proxy.example.com npm run build
 ```
+
+同一份构建也可以把 Worker 地址填进去代替自己的代理：Worker 会转发到指针指着的那个上游。
 
 前面再套一层做 TLS 终止的反向代理。整条链必须留在 HTTPS 上：HTTPS 加载的页面不允许调用 `http://` 的接口（混合内容），而且 key 会以明文过网络。
 
@@ -447,7 +506,7 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 npm install        # 安装依赖
 npm run dev        # 开发服务器，http://localhost:5173
 npm run proxy      # 本地代理，http://127.0.0.1:8787
-npm run tunnel     # 本地代理加 Cloudflare 快速隧道，同步到仓库变量
+npm run tunnel     # 可选：本机代理加 Cloudflare 快速隧道，同步到仓库变量
 npm run typecheck  # TypeScript 检查，不产出文件
 npm run build      # 类型检查加生产构建，产物在 dist/
 npm run preview    # 本地预览生产构建
@@ -483,7 +542,8 @@ hippocrenes-model-chat/
 │   └── check-readme-parity.mjs
 └── .github/workflows/
     ├── ci.yml            # 类型检查、README 同步检查、构建
-    └── deploy.yml        # 构建并发布到 GitHub Pages
+    ├── deploy.yml        # 构建并发布到 GitHub Pages
+    └── tunnel.yml        # 把代理托管在 GitHub Actions runner 上
 ```
 
 ### 状态是怎么分的

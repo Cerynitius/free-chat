@@ -2,9 +2,14 @@
 
 A zero-dependency CORS + SSE reverse proxy for the static chat frontend.
 
-One implementation (`handler.js`), several ways to run it: a plain Node server, a
-Cloudflare quick tunnel in front of that server, Vercel on the Node runtime,
-Deno Deploy, and Cloudflare Workers.
+One implementation (`handler.js`), several ways to run it: a GitHub Actions
+runner (the default), a plain Node server, a Cloudflare quick tunnel in front of
+that server, Vercel on the Node runtime, Deno Deploy, and Cloudflare Workers.
+
+**The default setup costs nothing and needs no account.** The proxy runs on a
+GitHub Actions runner — Actions minutes are free for a public repository — and
+the site on GitHub Pages talks to a fixed Cloudflare Worker address that follows
+the tunnel. See [Deployment](#deployment).
 
 ---
 
@@ -55,10 +60,13 @@ combination is what rules the Workers deployment out. Measured, not assumed:
 | `cloudflare:sockets` on the free plan | Plain TCP connects, but `secureTransport: 'on'` silently degrades to cleartext and the upstream answers `400 The plain HTTP request was sent to HTTPS port`. `startTls()` throws. TLS over sockets needs the Workers Paid plan. |
 
 The conclusion is one rule: **the proxy has to run on a machine with
-unrestricted network access** — an ordinary container or a virtual machine. The
-Workers files (`wrangler.toml`, and `handler.js` as the Worker entry point) are
-still here and still work for an upstream that has a domain name; against this
-one they do not apply.
+unrestricted network access** — an ordinary container or a virtual machine.
+
+That rules out the *proxy* on Workers. It does not rule out the *Worker* as a
+front door: the Worker only has to fetch an ordinary hostname, and the tunnel
+address is one. So the Worker is used here as the fixed entry point in front of
+the tunnel, not as the place where the proxy runs. See
+[Deployment](#deployment).
 
 ---
 
@@ -79,13 +87,33 @@ general-purpose relay.
 
 ### Configuration
 
-All platforms inject the same three variables:
+All platforms inject the same variables:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `UPSTREAM` | `https://182.92.245.176:1920` | Upstream base URL. Only `https` works; plain HTTP to that port gets nginx's `400 plain HTTP request was sent to HTTPS port`. |
+| `UPSTREAM_POINTER` | *(unset)* | URL of a publicly readable text file whose content is the current upstream address. When it is set, the proxy fetches that file at runtime and uses what it finds as the upstream. See [The upstream pointer](#the-upstream-pointer). |
 | `API_KEY` | *(unset)* | Bearer token injected into upstream requests. **If set, it overrides whatever the client sent.** If unset, the client's `Authorization` header is passed through unchanged. |
 | `ALLOWED_ORIGINS` | *(empty)* | Comma-separated `Origin` allowlist. Empty means allow everything (`*`). When non-empty, only listed origins get an `Access-Control-Allow-Origin` header — for any other origin the header is simply omitted, and the browser does the blocking. |
+
+### The upstream pointer
+
+A tunnel address changes on every restart. Baking it into the build would mean
+redeploying the site every time the tunnel came back, so the upstream is
+resolved at runtime instead: `UPSTREAM_POINTER` names a publicly readable text
+file whose content is the current upstream address, and the proxy fetches that
+file and uses what it finds.
+
+`wrangler.toml` points it at the `tunnel-url` file on the `runtime` branch:
+
+```
+UPSTREAM_POINTER = "https://raw.githubusercontent.com/JiHuiYiYou/hippocrenes-model-chat/runtime/tunnel-url"
+```
+
+The `runtime` branch is an orphan branch that holds nothing but that one file.
+The pointer is cached for 30 seconds, so a new upstream address reaches the
+proxy within half a minute. A failed read keeps the last address that worked
+instead of taking the proxy down.
 
 ### The proxy's own key never reaches the browser
 
@@ -97,7 +125,45 @@ Calling the origin directly cannot offer this guarantee: a key baked into a Java
 
 ## Deployment
 
-### 1. Local Node server (development)
+### 1. GitHub Actions (default, free, no registration)
+
+Actions minutes are free for public repositories, so this costs nothing and
+needs no account of your own.
+
+`.github/workflows/tunnel.yml` hosts the proxy on a runner. It starts one run
+every four hours (`cron: 17 */4 * * *`) and lets each run live for at most 5.5
+hours (`timeout-minutes: 330`). Inside a run it:
+
+1. installs `cloudflared`;
+2. starts the local proxy (`node proxy/server.mjs`) with the key read from the
+   repository secret `VITE_API_KEY`;
+3. opens `cloudflared tunnel --url http://127.0.0.1:8787`;
+4. writes the resulting tunnel address into the `tunnel-url` file on the
+   `runtime` branch;
+5. keeps the proxy and the tunnel alive until the job reaches its time limit.
+
+The run fails when the runner cannot reach the origin: the workflow probes
+`/__ping` and requires `"reachable": true` in the answer, so a tunnel that came
+up but cannot reach the upstream never passes as a success.
+
+`concurrency` is `group: tunnel` with `cancel-in-progress: true`, so a new run
+cancels the previous one. The handover leaves a gap of a few seconds, but a new
+run never has to queue behind a five-hour job.
+
+A Cloudflare Worker sits in front of the tunnel as the fixed entry point:
+
+```
+browser -> GitHub Pages -> Cloudflare Worker (fixed address) -> tunnel (trycloudflare.com) -> proxy on the Actions runner -> upstream
+```
+
+The Worker never changes address. It reads the current tunnel address from the
+pointer file on the `runtime` branch, so a new tunnel reaches it within 30
+seconds and neither the Worker nor the site has to be redeployed.
+
+Two limits to know about: GitHub stops scheduled workflows after 60 days
+without repository activity, and every handover leaves a gap of a few seconds.
+
+### 2. Local Node server (development)
 
 Requires Node 18 or newer (for the global `fetch`, `Request`, `Response`).
 
@@ -123,58 +189,6 @@ Verify:
 ```bash
 curl http://127.0.0.1:8787/__ping
 ```
-
-### 2. Cloudflare quick tunnel (no registration)
-
-`proxy/tunnel.mjs` starts the local Node server and a `cloudflared` tunnel to
-it, then publishes the tunnel address into the repository variable
-`VITE_PROXY_URL` and triggers the Pages deployment:
-
-```
-browser -> GitHub Pages -> tunnel (trycloudflare.com) -> local proxy -> upstream
-```
-
-The tunnel address changes on every restart, so the script rewrites the
-variable and redeploys instead of leaving the site pointing at a dead address.
-
-Prerequisites:
-
-- The `cloudflared` binary. It is about 55 MB and is deliberately not
-  committed (`.gitignore` lists `proxy/cloudflared.exe` and `proxy/cloudflared`).
-  Windows:
-
-  ```powershell
-  Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "proxy/cloudflared.exe"
-  ```
-
-  Linux and macOS:
-
-  ```bash
-  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o proxy/cloudflared
-  chmod +x proxy/cloudflared
-  ```
-
-- The `gh` CLI, authenticated with `gh auth login`. The script uses it to write
-  the repository variable. On Windows it looks for
-  `C:/Program Files/GitHub CLI/gh.exe`; `GH_PATH` overrides the lookup.
-
-Then, from the repository root:
-
-```bash
-API_KEY=sk-your-key npm run tunnel
-```
-
-The key is read from `API_KEY` first and from `proxy/.dev.vars` second. Set
-`NO_SYNC=1` to keep the script from touching the repository — it then only
-prints the tunnel address.
-
-Measured on a running tunnel:
-
-| Check | Result |
-|---|---|
-| `GET /__ping` | `reachable: true`, `hasKey: true`, `latencyMs` between 29 and 134 |
-| CORS preflight | `204` with `Access-Control-Allow-Origin: *` |
-| SSE stream | 90 frames spread between 2745 ms and 3912 ms, so it is a real stream and not one buffered blob |
 
 ### 3. Vercel (Node runtime)
 
@@ -216,31 +230,7 @@ Verify:
 curl https://<your-project>.deno.dev/__ping
 ```
 
-### 5. Cloudflare Workers (only for an upstream that has a domain name)
-
-This deployment does not work against `182.92.245.176:1920` — see
-[It cannot run on Cloudflare Workers](#it-cannot-run-on-cloudflare-workers). It
-is kept here for an upstream that is reached by a domain name.
-
-```bash
-cd proxy
-npm install -g wrangler        # or: npx wrangler ...
-wrangler login
-wrangler secret put API_KEY    # encrypted secret, never in git
-wrangler deploy
-```
-
-`wrangler.toml` holds `UPSTREAM` and `ALLOWED_ORIGINS` as plain vars (they are
-public), while the key goes in as a secret. Add your own domain to
-`ALLOWED_ORIGINS` before deploying to production.
-
-Verify:
-
-```bash
-curl https://hippocrenes-model-chat-proxy.<your-subdomain>.workers.dev/__ping
-```
-
-### Self-hosting the Node server
+### 5. Your own server
 
 The Node runner binds to `127.0.0.1` by default. To expose it, bind to all
 interfaces and put a TLS-terminating reverse proxy in front of it:
@@ -252,6 +242,89 @@ API_KEY=sk-your-key node server.mjs --host 0.0.0.0 --port 8787
 Keep the proxy on HTTPS. A browser page loaded over HTTPS cannot call an
 `http://` proxy (mixed content), and the API key would cross the network in
 clear text.
+
+### 6. Cloudflare quick tunnel on your own machine (no registration)
+
+`proxy/tunnel.mjs` starts the local Node server and a `cloudflared` tunnel to
+it, then publishes the tunnel address into the repository variable
+`VITE_PROXY_URL` and triggers the Pages deployment:
+
+```
+browser -> GitHub Pages -> tunnel (trycloudflare.com) -> local proxy -> upstream
+```
+
+The tunnel address changes on every restart, so the script rewrites the
+variable and redeploys instead of leaving the site pointing at a dead address.
+This path bypasses the Worker and the Actions runner: the built site talks
+straight to your tunnel, and your machine has to be on for that to work.
+
+Prerequisites:
+
+- The `cloudflared` binary. It is about 55 MB and is deliberately not
+  committed (`.gitignore` lists `proxy/cloudflared.exe` and `proxy/cloudflared`).
+  Windows:
+
+  ```powershell
+  Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "proxy/cloudflared.exe"
+  ```
+
+  Linux and macOS:
+
+  ```bash
+  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o proxy/cloudflared
+  chmod +x proxy/cloudflared
+  ```
+
+- The `gh` CLI, authenticated with `gh auth login`. The script uses it to write
+  the repository variable. On Windows it looks for
+  `C:/Program Files/GitHub CLI/gh.exe`; `GH_PATH` overrides the lookup.
+
+Then, from the repository root:
+
+```bash
+API_KEY=sk-your-key npm run tunnel
+```
+
+The key is read from `API_KEY` first and from `proxy/.dev.vars` second. Set
+`NO_SYNC=1` to keep the script from touching the repository — it then only
+prints the tunnel address.
+
+Measured on a running tunnel:
+
+| Check | Result |
+|---|---|
+| `GET /__ping` | `reachable: true`, `hasKey: true`, `latencyMs` between 29 and 134 |
+| CORS preflight | `204` with `Access-Control-Allow-Origin: *` |
+| SSE stream | 90 frames spread between 2745 ms and 3912 ms, so it is a real stream and not one buffered blob |
+
+### 7. Cloudflare Workers as a fixed entry point
+
+The Worker cannot run the proxy against `182.92.245.176:1920` — see
+[It cannot run on Cloudflare Workers](#it-cannot-run-on-cloudflare-workers).
+It can, however, sit in front of a tunnel and follow its address through
+`UPSTREAM_POINTER`, which is how the default setup uses it.
+
+```bash
+cd proxy
+npm install -g wrangler        # or: npx wrangler ...
+wrangler login
+wrangler secret put API_KEY    # encrypted secret, never in git
+wrangler deploy
+```
+
+`wrangler.toml` holds `UPSTREAM`, `UPSTREAM_POINTER`, and `ALLOWED_ORIGINS` as
+plain vars (they are public), while the key goes in as a secret. Add your own
+domain to `ALLOWED_ORIGINS` before deploying to production.
+
+Verify:
+
+```bash
+curl https://hippocrenes-model-chat-proxy.<your-subdomain>.workers.dev/__ping
+```
+
+With a pointer configured, the `upstream` field of the answer shows the address
+the pointer currently names — the current tunnel address — rather than the
+origin.
 
 ---
 
@@ -282,6 +355,7 @@ curl https://your-proxy.example/__ping
 | Field | Meaning |
 |---|---|
 | `ok` | Upstream answered `2xx`. |
+| `upstream` | The upstream the proxy actually used. With `UPSTREAM_POINTER` set, this is the address the pointer names — the current tunnel address — rather than the origin. |
 | `reachable` | Upstream answered at all (any status). `false` means the network path is broken. |
 | `latencyMs` | Round-trip time of the probe request. |
 | `error` | The raw error. `null` on success. Network failures keep the original message so you can see the actual cause. |
@@ -291,8 +365,8 @@ curl https://your-proxy.example/__ping
 `reachable: false` almost always means the platform cannot reach that
 non-standard port. Against this upstream Cloudflare Workers always fails here
 (`1003`; see [It cannot run on Cloudflare Workers](#it-cannot-run-on-cloudflare-workers)).
-Switch to the tunnel, Deno Deploy, Vercel on the Node runtime, or a
-self-hosted Node server.
+Switch to the Actions runner, the tunnel, Deno Deploy, Vercel on the Node
+runtime, or a self-hosted Node server.
 
 Other checks:
 
@@ -363,12 +437,12 @@ after deploying.** Check that the entry point exports the right shape:
 
 | File | Purpose |
 |---|---|
-| `handler.js` | Core logic. Exports `handleRequest(request, env)` and `default { fetch }`. Zero dependencies, Web standard APIs only. |
+| `handler.js` | Core logic. Exports `handleRequest(request, env)` and `default { fetch }`. Zero dependencies, Web standard APIs only. Resolves the upstream from `UPSTREAM_POINTER` when that variable is set. |
 | `server.mjs` | Node runner. `node:http` plus Node 18+ globals. Streams SSE chunk by chunk. |
-| `tunnel.mjs` | Starts `server.mjs` plus a `cloudflared` tunnel, writes the tunnel address into `VITE_PROXY_URL` with the `gh` CLI, and triggers the Pages deployment. |
+| `tunnel.mjs` | Starts `server.mjs` plus a `cloudflared` tunnel, writes the tunnel address into `VITE_PROXY_URL` with the `gh` CLI, and triggers the Pages deployment. The self-hosted alternative to the Actions runner. |
 | `deno.ts` | Deno Deploy entry point. |
 | `api/[...path].js` | Vercel entry point on the Node runtime. Strips the `/api` prefix the rewrite added, then writes the response back chunk by chunk. |
 | `vercel.json` | Vercel routing: every path is rewritten onto `/api`. |
 | `vercel/edge.ts` | Vercel Edge entry point. |
-| `wrangler.toml` | Cloudflare Workers configuration. `API_KEY` is a secret, not a var. |
+| `wrangler.toml` | Cloudflare Workers configuration. `API_KEY` is a secret, not a var; `UPSTREAM_POINTER` points the Worker at the current tunnel address. |
 | `.dev.vars.example` | Template for `.dev.vars` (git-ignored) used by `wrangler dev`. |

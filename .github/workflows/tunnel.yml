@@ -17,10 +17,10 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: tunnel
-  # 新一轮取消上一轮：隧道交接时会有几秒空窗，但不会让新 run 排队 5 小时
-  cancel-in-progress: true
+# 不做并发分组：新一轮要能**和**上一轮并存。
+# 下一轮的隧道起来、指针指过去之后，上一轮还活着 1.5 小时才自然结束 ——
+# 这段时间两个隧道都在跑，所以交接时站点没有空窗。
+# （同一组名字 + cancel-in-progress:false 反而会让新一轮排队 5.5 小时。）
 
 jobs:
   tunnel:
