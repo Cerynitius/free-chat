@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#FBFBFA"/>
+  <rect x="80" y="80" width="56" height="56" rx="10" fill="#111111"/>
+  <path d="M96 118V98M120 118V98M96 108h24" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <text x="80" y="300" font-family="Georgia, 'Songti SC', serif" font-size="76" fill="#111111" letter-spacing="-1.5">Hippocrene&#8217;s Model Chat</text>
+  <text x="80" y="372" font-family="Georgia, 'Songti SC', serif" font-size="34" fill="#787774">DeepSeek-style streaming chat over an OpenAI-compatible SSE endpoint</text>
+  <line x1="80" y1="430" x2="1120" y2="430" stroke="#EAEAEA" stroke-width="1"/>
+  <text x="80" y="492" font-family="ui-monospace, 'Cascadia Code', monospace" font-size="26" fill="#787774">thinking panel &#183; code highlighting &#183; KaTeX &#183; mobile ready</text>
+</svg>

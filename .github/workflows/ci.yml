@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 类型检查 / README 同步 / 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      # 两份 README 的章节骨架必须一致 —— 门面分叉比内容旧更糟
+      - name: README 中英文同步检查
+        run: npm run check:readme
+
+      - name: 构建
+        run: npm run build
+
+      - name: 代理核心语法检查
+        run: node --check proxy/handler.js

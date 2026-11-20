@@ -1,0 +1,16 @@
+{
+  "name": "hippocrenes-model-chat-proxy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Zero-dependency CORS + SSE reverse proxy for the model-chat frontend",
+  "main": "handler.js",
+  "scripts": {
+    "dev": "node server.mjs",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

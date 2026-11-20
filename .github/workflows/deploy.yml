@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+# 推 main 就发布：https://jihuiyiyou.github.io/hippocrenes-model-chat/
+#
+# 构建时把仓库 secret VITE_API_KEY 注入产物 —— key 不进仓库，
+# 但会出现在发到公网的 JS 里（这是「内置到网页」的必然结果，见 README 的安全说明）。
+#
+# 想让访客开箱即用，就在仓库变量里设 VITE_PROXY_URL = 你的代理地址。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个发布；新 push 掐掉旧的
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # 先类型检查再发版 —— 别把坏掉的版本推上去
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 构建
+        run: npm run build
+        env:
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
+          VITE_PROXY_URL: ${{ vars.VITE_PROXY_URL }}
+
+      # `enablement: true` = 站点不存在就自动建一个（fork 出去也能直接发，
+      # 不用先去 Settings → Pages 点一遍）
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    name: 发布
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

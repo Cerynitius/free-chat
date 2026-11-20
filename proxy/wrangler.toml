@@ -1,0 +1,10 @@
+name = "hippocrenes-model-chat-proxy"
+main = "handler.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[vars]
+UPSTREAM = "https://182.92.245.176:1920"
+ALLOWED_ORIGINS = "https://jihuiyiyou.github.io,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:8787"
+
+# API_KEY 不写在这里 —— 用 `wrangler secret put API_KEY` 存成加密的 secret。
