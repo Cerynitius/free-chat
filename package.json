@@ -10,7 +10,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check:readme": "node tools/check-readme-parity.mjs"
+    "check:readme": "node tools/check-readme-parity.mjs",
+    "tunnel": "node proxy/tunnel.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

@@ -11,6 +11,7 @@
     "deploy:dry": "wrangler deploy --dry-run"
   },
   "devDependencies": {
+    "vercel": "^66.5.0",
     "wrangler": "^4"
   }
 }

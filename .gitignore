@@ -11,6 +11,10 @@ tsconfig.tsbuildinfo
 .env.local
 .env.*.local
 
+# cloudflared 二进制（55 MB，不入库）
+proxy/cloudflared.exe
+proxy/cloudflared
+
 # 代理的本地配置（API key 放这里）
 proxy/.dev.vars
 proxy/.wrangler/
