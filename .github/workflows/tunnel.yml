@@ -19,7 +19,8 @@ permissions:
 
 concurrency:
   group: tunnel
-  cancel-in-progress: false
+  # 新一轮取消上一轮：隧道交接时会有几秒空窗，但不会让新 run 排队 5 小时
+  cancel-in-progress: true
 
 jobs:
   tunnel:
@@ -46,10 +47,13 @@ jobs:
         env:
           API_KEY: ${{ secrets.VITE_API_KEY }}
         run: |
+          set -euo pipefail
           node proxy/server.mjs > proxy.log 2>&1 &
           echo $! > proxy.pid
           sleep 3
-          curl -sS --max-time 30 http://127.0.0.1:8787/__ping | head -20
+          curl -sSf --max-time 30 http://127.0.0.1:8787/__ping | tee proxy-ping.json
+          # runner 连不上源站就直接失败 —— 别让一个「隧道起来了但打不通」的假成功混过去
+          grep -q '"reachable": true' proxy-ping.json
 
       - name: 起隧道
         id: tunnel
@@ -73,14 +77,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           URL: ${{ steps.tunnel.outputs.url }}
         run: |
-          # 用 Contents API 写 —— 单文件、专用分支，不用在主工作区里折腾 git 分支
-          PAYLOAD=$(printf '{"message":"chore: 更新隧道地址","branch":"runtime","content":"%s"}' \
-            "$(printf '%s' "$URL" | base64 -w0)")
-          curl -sS -X PUT \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/tunnel-url?ref=runtime" \
-            -d "$PAYLOAD" | head -20
+          set -euo pipefail
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY/contents/tunnel-url"
+          CONTENT=$(printf '%s' "$URL" | base64 -w0)
+          # 更新已存在的文件必须带它当前的 blob sha —— 少了这个 API 会静默地不写
+          SHA=$(curl -sSf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API?ref=runtime" | jq -r '.sha')
+          printf '{"message":"chore: 更新隧道地址","branch":"runtime","content":"%s","sha":"%s"}' \
+            "$CONTENT" "$SHA" > payload.json
+          curl -sSf -X PUT -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API?ref=runtime" -d @payload.json | jq -r '.content.path + " @ " + .commit.sha'
+          # 写完立刻读回来核对 —— 确认 Worker 下一轮能读到的是新地址
+          curl -sSf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
+            "$API?ref=runtime"
+          echo "隧道地址: $URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 保持进程活着
         run: |
