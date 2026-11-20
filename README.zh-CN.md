@@ -157,7 +157,7 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | 常量 | 来源 | 含义 |
 |---|---|---|
 | `BASE_URL` | 写死在 `src/config.ts` | 源站地址，`https://182.92.245.176:1920`。 |
-| `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理地址。填了就所有请求都走代理，留空就直接打源站。 |
+| `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理的公网地址。填了就所有请求都走代理，留空就直接打源站。 |
 | `API_KEY` | `VITE_API_KEY` | Bearer 令牌。代理在服务端注入 key 时它可以是空的。 |
 | `MODEL` | 写死在 `src/config.ts` | `dsv4-flash`。 |
 | `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`4096` 和一个空的系统提示词。 |

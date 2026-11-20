@@ -2,8 +2,9 @@
 
 A zero-dependency CORS + SSE reverse proxy for the static chat frontend.
 
-One implementation (`handler.js`), four ways to run it: Cloudflare Workers, Deno
-Deploy, Vercel Edge Functions, and a plain Node server.
+One implementation (`handler.js`), several ways to run it: a plain Node server, a
+Cloudflare quick tunnel in front of that server, Vercel on the Node runtime,
+Deno Deploy, and Cloudflare Workers.
 
 ---
 
@@ -36,6 +37,28 @@ The frontend talks to it through one build-time variable: set `VITE_PROXY_URL`
 to the proxy's base URL and the app routes every request through it. Locally
 that variable defaults to `http://127.0.0.1:8787`, which is where
 `npm run proxy` listens.
+
+---
+
+## It cannot run on Cloudflare Workers
+
+The upstream is reached over TLS at a bare IP address, `182.92.245.176:1920`.
+There is no domain name for it, and its certificate names only that IP. That
+combination is what rules the Workers deployment out. Measured, not assumed:
+
+| Attempt | Result |
+|---|---|
+| `fetch()` straight to the bare IP | `HTTP 403` with Cloudflare error `1003`. The edge does not connect to IP addresses. |
+| `fetch()` to a wildcard DNS name pointing at the same IP (`nip.io`, `sslip.io`) | `HTTP 526 Invalid SSL Certificate`. The certificate names the IP, not the host. |
+| `resolveOverride`, in either direction | `1003` and `526` again. |
+| The IP in other spellings: IPv4-mapped IPv6, trailing dot, octal, hexadecimal | `1003` every time. The edge normalizes the address before it checks it. |
+| `cloudflare:sockets` on the free plan | Plain TCP connects, but `secureTransport: 'on'` silently degrades to cleartext and the upstream answers `400 The plain HTTP request was sent to HTTPS port`. `startTls()` throws. TLS over sockets needs the Workers Paid plan. |
+
+The conclusion is one rule: **the proxy has to run on a machine with
+unrestricted network access** — an ordinary container or a virtual machine. The
+Workers files (`wrangler.toml`, and `handler.js` as the Worker entry point) are
+still here and still work for an upstream that has a domain name; against this
+one they do not apply.
 
 ---
 
@@ -101,7 +124,103 @@ Verify:
 curl http://127.0.0.1:8787/__ping
 ```
 
-### 2. Cloudflare Workers
+### 2. Cloudflare quick tunnel (no registration)
+
+`proxy/tunnel.mjs` starts the local Node server and a `cloudflared` tunnel to
+it, then publishes the tunnel address into the repository variable
+`VITE_PROXY_URL` and triggers the Pages deployment:
+
+```
+browser -> GitHub Pages -> tunnel (trycloudflare.com) -> local proxy -> upstream
+```
+
+The tunnel address changes on every restart, so the script rewrites the
+variable and redeploys instead of leaving the site pointing at a dead address.
+
+Prerequisites:
+
+- The `cloudflared` binary. It is about 55 MB and is deliberately not
+  committed (`.gitignore` lists `proxy/cloudflared.exe` and `proxy/cloudflared`).
+  Windows:
+
+  ```powershell
+  Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "proxy/cloudflared.exe"
+  ```
+
+  Linux and macOS:
+
+  ```bash
+  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o proxy/cloudflared
+  chmod +x proxy/cloudflared
+  ```
+
+- The `gh` CLI, authenticated with `gh auth login`. The script uses it to write
+  the repository variable. On Windows it looks for
+  `C:/Program Files/GitHub CLI/gh.exe`; `GH_PATH` overrides the lookup.
+
+Then, from the repository root:
+
+```bash
+API_KEY=sk-your-key npm run tunnel
+```
+
+The key is read from `API_KEY` first and from `proxy/.dev.vars` second. Set
+`NO_SYNC=1` to keep the script from touching the repository — it then only
+prints the tunnel address.
+
+Measured on a running tunnel:
+
+| Check | Result |
+|---|---|
+| `GET /__ping` | `reachable: true`, `hasKey: true`, `latencyMs` between 29 and 134 |
+| CORS preflight | `204` with `Access-Control-Allow-Origin: *` |
+| SSE stream | 90 frames spread between 2745 ms and 3912 ms, so it is a real stream and not one buffered blob |
+
+### 3. Vercel (Node runtime)
+
+The project root is the `proxy/` directory. The entry point is `api/index.js`,
+and `vercel.json` rewrites every path onto it.
+
+Use the Node runtime, not Edge. An Edge function runs on an edge node; a Node
+function runs in a real container, and only a real container can be relied on to
+reach a bare IP on a non-standard port.
+
+```bash
+cd proxy
+npx vercel --prod
+```
+
+Set `API_KEY` as a project environment variable in the Vercel dashboard.
+`UPSTREAM` and `ALLOWED_ORIGINS` have working defaults.
+
+Verify:
+
+```bash
+curl https://<your-project>.vercel.app/__ping
+```
+
+### 4. Deno Deploy
+
+`deno.ts` is the entry point.
+
+```bash
+deno deploy --project=<your-project> deno.ts
+```
+
+Set the environment variables in the Deno Deploy dashboard
+(`UPSTREAM`, `API_KEY`, `ALLOWED_ORIGINS`).
+
+Verify:
+
+```bash
+curl https://<your-project>.deno.dev/__ping
+```
+
+### 5. Cloudflare Workers (only for an upstream that has a domain name)
+
+This deployment does not work against `182.92.245.176:1920` — see
+[It cannot run on Cloudflare Workers](#it-cannot-run-on-cloudflare-workers). It
+is kept here for an upstream that is reached by a domain name.
 
 ```bash
 cd proxy
@@ -119,39 +238,6 @@ Verify:
 
 ```bash
 curl https://hippocrenes-model-chat-proxy.<your-subdomain>.workers.dev/__ping
-```
-
-### 3. Deno Deploy
-
-`deno.ts` is the entry point.
-
-```bash
-deno deploy --project=<your-project> deno.ts
-```
-
-Set the environment variables in the Deno Deploy dashboard
-(`UPSTREAM`, `API_KEY`, `ALLOWED_ORIGINS`).
-
-Verify:
-
-```bash
-curl https://<your-project>.deno.dev/__ping
-```
-
-### 4. Vercel Edge Functions
-
-Copy `vercel/edge.ts` into the `api/` directory of a Vercel project (for
-example `api/edge.ts`), keeping `handler.js` next to it, then set `UPSTREAM`,
-`API_KEY`, and `ALLOWED_ORIGINS` as project environment variables.
-
-```bash
-vercel deploy
-```
-
-Verify:
-
-```bash
-curl https://<your-project>.vercel.app/api/edge/__ping
 ```
 
 ### Self-hosting the Node server
@@ -203,8 +289,9 @@ curl https://your-proxy.example/__ping
 | `hasKey` | Whether `API_KEY` is configured on the proxy. |
 
 `reachable: false` almost always means the platform cannot reach that
-non-standard port — Cloudflare Workers in particular is inconsistent about
-outbound connections to port 1920. Switch to Deno Deploy, Vercel Edge, or a
+non-standard port. Against this upstream Cloudflare Workers always fails here
+(`1003`; see [It cannot run on Cloudflare Workers](#it-cannot-run-on-cloudflare-workers)).
+Switch to the tunnel, Deno Deploy, Vercel on the Node runtime, or a
 self-hosted Node server.
 
 Other checks:
@@ -240,8 +327,9 @@ blocks the response — add the exact origin (scheme + host + port) to the list.
 
 **`HTTP 401` from the upstream.** The proxy has no `API_KEY` configured, or the
 key is wrong. `/__ping` shows `hasKey: false` when nothing is configured. Set
-the key: `wrangler secret put API_KEY` on Workers, the dashboard on Deno
-Deploy and Vercel, or the `API_KEY` environment variable for Node.
+the key: the `API_KEY` environment variable for Node and for the tunnel, the
+dashboard on Deno Deploy and Vercel, or `wrangler secret put API_KEY` on
+Workers.
 
 **`HTTP 403` with "is not allowed on this endpoint".** Expected — the upstream
 only exposes `/v1/chat/completions`, `/v1/models`, and `/health`. The proxy
@@ -265,8 +353,9 @@ nginx) and make sure compression is off for the `text/event-stream` path.
 
 **`Cannot read properties of undefined (reading 'get')` or odd errors right
 after deploying.** Check that the entry point exports the right shape:
-`export default { fetch: handleRequest }` for Workers and Deno Deploy, and a
-bare `export default handleRequest` for Vercel Edge.
+`export default { fetch: handleRequest }` for Workers and Deno Deploy, a bare
+`export default handleRequest` for Vercel Edge, and a Node-style
+`(req, res)` function for `api/index.js`.
 
 ---
 
@@ -276,7 +365,10 @@ bare `export default handleRequest` for Vercel Edge.
 |---|---|
 | `handler.js` | Core logic. Exports `handleRequest(request, env)` and `default { fetch }`. Zero dependencies, Web standard APIs only. |
 | `server.mjs` | Node runner. `node:http` plus Node 18+ globals. Streams SSE chunk by chunk. |
+| `tunnel.mjs` | Starts `server.mjs` plus a `cloudflared` tunnel, writes the tunnel address into `VITE_PROXY_URL` with the `gh` CLI, and triggers the Pages deployment. |
 | `deno.ts` | Deno Deploy entry point. |
+| `api/index.js` | Vercel entry point on the Node runtime. Writes the response back chunk by chunk. |
+| `vercel.json` | Vercel routing: every path is rewritten onto `/api`. |
 | `vercel/edge.ts` | Vercel Edge entry point. |
 | `wrangler.toml` | Cloudflare Workers configuration. `API_KEY` is a secret, not a var. |
 | `.dev.vars.example` | Template for `.dev.vars` (git-ignored) used by `wrangler dev`. |

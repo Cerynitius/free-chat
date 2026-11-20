@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A tunnel launcher, `proxy/tunnel.mjs`, wired to `npm run tunnel`: it starts the local proxy, opens a Cloudflare quick tunnel to it, and writes the resulting `trycloudflare.com` address into the repository variable `VITE_PROXY_URL` with the `gh` CLI before triggering the Pages deployment. The tunnel address changes on every restart, and the site follows it automatically.
+- A Vercel entry point on the Node runtime, `proxy/api/index.js`, with `proxy/vercel.json` rewriting every path onto it. The project root is `proxy/`. Node rather than Edge, because an Edge function runs on an edge node and only a real container can be relied on to reach a bare IP on a non-standard port.
+
 ### Changed
 
 - The project is now a chat client for exactly one model, `dsv4-flash`, and both READMEs say so. The generic OpenAI-compatible framing is gone.
@@ -16,7 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The reasoning effort chip now offers all five levels: off, none, low, high, and max.
 - The empty state is reduced to the product name. The onboarding guide, the introduction copy, and the suggested questions are gone.
 - The API key table in the READMEs now lists two locations instead of three, and the claim that the frontend probes `/__ping` before sending its own key was dropped: the proxy injects the key server-side and overrides whatever the client sent.
-- The README deployment chapter now tells you to set the repository variable `VITE_PROXY_URL` to the address of your proxy, instead of telling you to type a proxy address into the interface.
+- The README deployment chapter now tells you to set the repository variable `VITE_PROXY_URL` to the public address of your proxy — the tunnel address, the Vercel or Deno Deploy URL, or the address of your own server — instead of telling you to type a proxy address into the interface.
+- Both READMEs and `proxy/README.md` no longer present Cloudflare Workers as a way to deploy this proxy. The upstream is reached over TLS at a bare IP whose certificate names only that IP, and the Workers edge refuses to connect to it: `error code: 1003` for the bare IP, `526 Invalid SSL Certificate` for a hostname that points at the same address, and the free plan cannot do TLS over `cloudflare:sockets`. The proxy therefore has to run on a machine with unrestricted network access — the quick tunnel, Vercel on the Node runtime, Deno Deploy, or a self-hosted Node server. The Workers deployment files stay in `proxy/` and still apply to an upstream that has a domain name.
 
 ### Removed
 

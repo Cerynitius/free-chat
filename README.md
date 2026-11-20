@@ -157,7 +157,7 @@ There is no screen where the user picks a backend. The target is decided at buil
 | Constant | Source | Meaning |
 |---|---|---|
 | `BASE_URL` | Hardcoded in `src/config.ts` | The origin address. `https://182.92.245.176:1920`. |
-| `PROXY_URL` | `VITE_PROXY_URL`, or `http://127.0.0.1:8787` in development | The proxy address. When it is set, every request goes through the proxy; when it is empty, the request goes straight to the origin. |
+| `PROXY_URL` | `VITE_PROXY_URL`, or `http://127.0.0.1:8787` in development | The proxy's public address. When it is set, every request goes through the proxy; when it is empty, the request goes straight to the origin. |
 | `API_KEY` | `VITE_API_KEY` | The bearer token. Empty when the proxy injects the key server-side. |
 | `MODEL` | Hardcoded in `src/config.ts` | `dsv4-flash`. |
 | `TEMPERATURE`, `TOP_P`, `MAX_TOKENS`, `SYSTEM_PROMPT` | Hardcoded in `src/config.ts` | The sampling parameters. `0.7`, `1`, `4096`, and an empty system prompt. |
