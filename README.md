@@ -237,19 +237,22 @@ The chain is:
 browser -> GitHub Pages -> Cloudflare Worker (fixed address) -> tunnel (trycloudflare.com) -> proxy on the Actions runner -> upstream
 ```
 
-`.github/workflows/tunnel.yml` drives the whole chain. It starts one run every four hours (`cron: 17 */4 * * *`) and lets each run live for at most 5.5 hours (`timeout-minutes: 330`). Inside a run it:
+`.github/workflows/tunnel.yml` drives the whole chain. A run lives for at most 5.5 hours (`timeout-minutes: 330`), and **each run starts its own successor ninety minutes before it runs out** — the handover does not lean on GitHub's scheduler (why, see the known limits below). Inside a run it:
 
 1. installs `cloudflared`;
 2. starts the local proxy (`node proxy/server.mjs`) with the key read from the repository secret `VITE_API_KEY`;
 3. opens `cloudflared tunnel --url http://127.0.0.1:8787`;
 4. writes the resulting `https://<random>.trycloudflare.com` address into the `tunnel-url` file on the `runtime` branch;
-5. keeps the proxy and the tunnel alive until the job reaches its time limit.
+5. keeps the proxy and the tunnel alive until the job reaches its time limit;
+6. ninety minutes before that limit, calls the Actions API with the repository's own `GITHUB_TOKEN` to start the next round. `workflow_dispatch` is exempt from the rule that events triggered by `GITHUB_TOKEN` do not create a new run, so the repository's own token is enough.
 
 The runner refuses to fake a success: the workflow probes `/__ping` and fails the run unless the answer contains `"reachable": true`. A tunnel that came up but cannot reach the upstream never passes.
 
 The `runtime` branch is an orphan branch that holds nothing but that one file.
 
 The workflow sets no concurrency group, so a new run starts alongside the previous one instead of cancelling it or queueing behind it. The previous round keeps running for another 1.5 hours after the new round has taken the pointer, so both tunnels are online during the handover and the site never sees a gap.
+
+Starting the `Tunnel` workflow by hand from the **Actions** tab takes two inputs. `takeover` defaults to `auto`, which probes the tunnel the pointer currently names and stands down if it is still alive, so a manual run never fights the self-perpetuating chain for the pointer; `always` takes over unconditionally. `handoff_now` starts the next round the moment the tunnel is up — the pointer moves to it at once — and keeps this round alive as a spare.
 
 ##### The Worker is the fixed entry point, the tunnel address is a pointer
 
@@ -407,8 +410,9 @@ The build uses a relative base path (`./`), so the same `dist/` directory also w
 
 ### Known limits of the Actions-hosted proxy
 
-The `Tunnel` workflow has to be running for the site to reach the model. One thing about it is worth knowing:
+The `Tunnel` workflow has to be running for the site to reach the model. Two things about it are worth knowing:
 
+- **GitHub's cron did not fire for this repository for a while.** The workflow keeps `cron: 17 */4 * * *` as a backstop, but it never ran (2026-11-20: neither the 12:17Z nor the 16:17Z slot moved), so every round of the tunnel was killed at its time limit with nobody taking over, and the site sat dark — the browser reported `HTTP 530 · error code: 1016` (the connector was still up, but the proxy process behind it had been taken away first) or `1033`. The handover therefore no longer depends on the scheduler: each round starts its own successor. Should the schedule ever wake up, it does no harm: a backstop-triggered round probes the tunnel the pointer names and stands down when it is still alive instead of fighting the chain for the pointer.
 - **GitHub stops the schedule after 60 days without activity.** If the repository sees no activity for 60 days, the cron schedule stops firing and the tunnel stops coming up. Push a commit, or start the `Tunnel` workflow by hand from the **Actions** tab, to bring it back.
 
 ### Self-hosting

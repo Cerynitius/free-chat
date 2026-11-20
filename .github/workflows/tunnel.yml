@@ -7,15 +7,30 @@ name: Tunnel
 # Worker 通过 UPSTREAM_POINTER 读那个文件，所以隧道换地址时
 # 不用重新部署任何东西 —— Worker 30 秒内自己跟上。
 #
-# 调度：每 4 小时起一次，单次最多跑 5.5 小时 —— 下一轮会在上一轮结束前接上，不留空窗。
+# 调度：**靠上一轮自己叫起下一轮**，不靠 GitHub 的 cron。
+# 实测这个仓库的 schedule 一直没触发（2026-11-20，12:17Z 和 16:17Z 两个时点
+# 都没跑），所以 cron 只留作兜底 —— 万一哪天它醒了，还得能跟自续链共存而不打架。
 
 on:
   schedule:
     - cron: '17 */4 * * *'
   workflow_dispatch:
+    inputs:
+      takeover:
+        description: 'auto = 当前隧道还活着就退位；always = 无条件接管'
+        type: choice
+        default: auto
+        options:
+          - auto
+          - always
+      handoff_now:
+        description: '立刻交接：起完隧道就叫下一轮（指针立刻交给它），本轮继续活着当备用'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  actions: write
 
 # 不做并发分组：新一轮要能**和**上一轮并存。
 # 下一轮的隧道起来、指针指过去之后，上一轮还活着 1.5 小时才自然结束 ——
@@ -35,7 +50,33 @@ jobs:
         with:
           node-version: 24
 
+      - name: 看当前隧道是不是还活着
+        id: current
+        run: |
+          # takeover=auto 是「兜底」那一类触发（cron、或者人手 dispatch）：
+          # 当前指针上的隧道还活着，就说明已经有一条链在跑 —— 退位，别抢指针。
+          # 不这么做的话，自续链和 cron 各带一条链，两边互相抢指针。
+          # takeover=always 是接班：上一轮点名叫来的，无条件接管。
+          if [ "${{ inputs.takeover }}" = "always" ]; then
+            echo 'mode=always —— 接班，无条件接管'
+            echo "mode=always" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          CUR=$(curl -sS --max-time 15 \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/runtime/tunnel-url?t=$(date +%s)" \
+            2>/dev/null | tr -d '[:space:]')
+          set -e
+          if [ -n "$CUR" ] && curl -sSf --max-time 20 "$CUR/__ping" > /dev/null 2>&1; then
+            echo "当前隧道还活着：$CUR —— 退位，不抢指针"
+            echo "mode=stand-down" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "mode=takeover —— 当前隧道不在了，接管"
+          echo "mode=takeover" >> "$GITHUB_OUTPUT"
+
       - name: 装 cloudflared
+        if: steps.current.outputs.mode != 'stand-down'
         run: |
           curl -sSL -o cloudflared \
             https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -44,6 +85,7 @@ jobs:
           cloudflared --version
 
       - name: 起本地代理
+        if: steps.current.outputs.mode != 'stand-down'
         env:
           API_KEY: ${{ secrets.VITE_API_KEY }}
         run: |
@@ -57,6 +99,7 @@ jobs:
 
       - name: 起隧道
         id: tunnel
+        if: steps.current.outputs.mode != 'stand-down'
         run: |
           cloudflared tunnel --url http://127.0.0.1:8787 --no-autoupdate > tunnel.log 2>&1 &
           echo $! > tunnel.pid
@@ -73,6 +116,7 @@ jobs:
           echo "隧道地址: $URL"
 
       - name: 把隧道地址写进 runtime 分支
+        if: steps.current.outputs.mode != 'stand-down'
         env:
           GH_TOKEN: ${{ github.token }}
           URL: ${{ steps.tunnel.outputs.url }}
@@ -93,10 +137,49 @@ jobs:
           echo "隧道地址: $URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 保持进程活着
+        if: steps.current.outputs.mode != 'stand-down'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HANDOFF_NOW: ${{ inputs.handoff_now }}
         run: |
-          # 代理和隧道要一直活着，直到这一轮 job 到点
+          set -uo pipefail
+
+          # 叫起下一轮。workflow_dispatch 不受「GITHUB_TOKEN 触发的事件不产生新 run」
+          # 那条限制 —— GitHub 明确把 workflow_dispatch 和 repository_dispatch 排除在外，
+          # 所以用仓库自带的 token 就够，不用另外配 PAT。
+          # takeover=always：接班的那一轮不许再「看隧道还活着就退位」。
+          dispatch_next() {
+            curl -sSf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/tunnel.yml/dispatches" \
+              -d '{"ref":"main","inputs":{"takeover":"always"}}'
+          }
+
+          # 本轮活到 job 的 timeout（330 分钟）为止，但**提前 90 分钟**叫下一轮 ——
+          # 新旧两轮重叠 90 分钟，站点没有空窗。
+          # （330 是这个 job 的 timeout，两个数字要一起改。）
+          DEADLINE=$(( $(date +%s) + (330*60 - 90*60) ))
+          handed=0
           while true; do
             sleep 300
             if ! kill -0 "$(cat proxy.pid)" 2>/dev/null; then echo '代理挂了'; exit 1; fi
             if ! kill -0 "$(cat tunnel.pid)" 2>/dev/null; then echo '隧道挂了'; exit 1; fi
+            if [ "$handed" = "0" ]; then
+              if [ "$HANDOFF_NOW" = "true" ]; then
+                echo '手动交接：立刻叫下一轮'
+                handed=1
+              elif [ "$(date +%s)" -ge "$DEADLINE" ]; then
+                echo '到交接时点，叫下一轮'
+                handed=1
+              fi
+              if [ "$handed" = "1" ]; then
+                if dispatch_next; then
+                  echo '下一轮已叫起'
+                else
+                  echo '::warning::叫下一轮失败 —— 本轮结束后站点会断，靠 cron 或手动 dispatch 兜底'
+                fi
+              fi
+            fi
           done

@@ -239,19 +239,22 @@ POST /v1/chat/completions  ->  同样零 CORS 头
 浏览器 -> GitHub Pages -> Cloudflare Worker（地址固定） -> 隧道(trycloudflare.com) -> Actions runner 上的代理 -> 源站
 ```
 
-`.github/workflows/tunnel.yml` 把整条链路串起来：每 4 小时起一次（`cron: 17 */4 * * *`），单次最多跑 5.5 小时（`timeout-minutes: 330`）。每一轮里它：
+`.github/workflows/tunnel.yml` 把整条链路串起来：单次最多跑 5.5 小时（`timeout-minutes: 330`），**上一轮在到期前 90 分钟自己叫起下一轮** —— 交接不靠 GitHub 的定时器（为什么，见下面的「已知限制」）。每一轮里它：
 
 1. 装 `cloudflared`；
 2. 起本地代理（`node proxy/server.mjs`，key 从仓库 secret `VITE_API_KEY` 读）；
 3. 开一条 `cloudflared tunnel --url http://127.0.0.1:8787`；
 4. 把拿到的 `https://<随机串>.trycloudflare.com` 地址写进 `runtime` 分支的 `tunnel-url` 文件；
-5. 让代理和隧道一直活着，直到这个 job 到点。
+5. 让代理和隧道一直活着，直到这个 job 到点；
+6. 离到期还剩 90 分钟时，用仓库自带的 `GITHUB_TOKEN` 调 Actions API 叫起下一轮（`workflow_dispatch` 不受「GITHUB_TOKEN 触发的事件不产生新 run」那条限制 —— GitHub 明确把它排除在外）。
 
 runner 不接受假成功：工作流会探一次 `/__ping`，响应里没有 `"reachable": true` 就直接判失败。隧道起来了但打不通源站，不会被当成成功。
 
 `runtime` 是孤儿分支，里面只有那一个文件。
 
 这条 workflow 不做并发分组，所以新一轮是和上一轮**并存**着起来的，既不会把上一轮取消掉，也不会排队等它跑完。新一轮把指针指过去之后，上一轮还会再活 1.5 小时才自然结束 —— 两个隧道同时在线，交接时站点没有空窗。
+
+「Actions」标签页手动跑这条 workflow 时有两个输入：`takeover` 选 `auto`（默认）的话，先探一下当前指针上的隧道 —— 还活着就退位，不跟自续链抢指针；选 `always` 就是无条件接管。`handoff_now` 勾上则是起完隧道立刻叫下一轮（指针立刻交给它），本轮继续活着当备用。
 
 ##### Worker 是固定入口，隧道地址是指针
 
@@ -409,8 +412,9 @@ key 可以放在两个地方：
 
 ### Actions 托管代理的已知限制
 
-站点要连得上模型，`Tunnel` 这条 workflow 就得跑着。关于它有一件事值得知道：
+站点要连得上模型，`Tunnel` 这条 workflow 就得跑着。关于它有两件事值得知道：
 
+- **GitHub 的 cron 在这个仓库上一度没被触发过。** workflow 里留了 `cron: 17 */4 * * *` 当兜底，但实测它一直没跑（2026-11-20，12:17Z 和 16:17Z 两个时点都没动静），于是每轮隧道到点被杀之后没人接手，站点就断着 —— 浏览器里报 `HTTP 530 · error code: 1016`（连接器还活着，但那头的代理进程先被收走了）或 `1033`。所以交接改成由**上一轮自己叫起下一轮**，不指望定时器。定时器哪天醒了也不碍事：兜底触发的那一轮会先探当前隧道，还活着就退位，不跟自续链抢指针。
 - **仓库 60 天没有活动，GitHub 会停掉定时工作流。** 连续 60 天没有任何活动，cron 就不再触发，隧道也就不会再起来。推一个 commit，或者到 **Actions** 标签页手动跑一次 `Tunnel`，就能把它救回来。
 
 ### 自建部署
