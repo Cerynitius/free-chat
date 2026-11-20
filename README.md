@@ -159,7 +159,7 @@ Because the server never reports token usage, the interface shows no usage count
 
 `max_tokens` is a **shared** budget: the upstream counts `reasoning_content` against it as well. A long think therefore eats the room the answer needs, and when the budget runs out the stream ends with `finish_reason: "length"` — usually in the middle of the reasoning, before the answer has even started. Measured against this upstream, a hard reasoning task at `max_tokens: 4096` spent all 4096 tokens on thinking and produced not a single token of answer.
 
-`MAX_TOKENS` is `32768` for that reason. The upstream accepts values up to `131072`.
+`MAX_TOKENS` is `131072` for that reason. The upstream takes that value without complaint, and it does not check it against the context window either: a 150,000-character prompt with `max_tokens: 131072` still comes back `200`. The value is a ceiling, not a target — in a side-by-side run the model wrote a *shorter* answer under the larger ceiling, because `max_tokens` says how much it may say, not how much it will.
 
 The client does not hide a cut-off response. The message carries a notice that tells the three cases apart:
 
@@ -179,7 +179,7 @@ There is no screen where the user picks a backend. The target is decided at buil
 | `PROXY_URL` | `VITE_PROXY_URL`, or `http://127.0.0.1:8787` in development | The proxy's public address — the Worker's address in the default setup. When it is set, every request goes through the proxy; when it is empty, the request goes straight to the origin. |
 | `API_KEY` | `VITE_API_KEY` | The bearer token. Empty when the proxy injects the key server-side. |
 | `MODEL` | Hardcoded in `src/config.ts` | `dsv4-flash`. |
-| `TEMPERATURE`, `TOP_P`, `MAX_TOKENS`, `SYSTEM_PROMPT` | Hardcoded in `src/config.ts` | The sampling parameters. `0.7`, `1`, `32768`, and an empty system prompt. |
+| `TEMPERATURE`, `TOP_P`, `MAX_TOKENS`, `SYSTEM_PROMPT` | Hardcoded in `src/config.ts` | The sampling parameters. `0.7`, `1`, `131072`, and an empty system prompt. |
 
 The rule is one line long: **a configured proxy wins, otherwise the browser calls the origin directly.** The second half only works if the origin serves CORS headers, and it does not.
 

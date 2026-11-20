@@ -161,7 +161,7 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 
 实测这个上游：一个需要深度推理的任务在 `max_tokens: 4096` 下把 4096 全花在思考上，正文一个 token 都没产出。
 
-所以 `MAX_TOKENS` 定成 `32768`。上游实测接受到 `131072`。
+所以 `MAX_TOKENS` 定成 `131072`。上游对这个值来者不拒，也不拿它跟上下文长度对照（15 万字提示词 + `max_tokens: 131072` 照样回 `200`）。它是天花板，不是目标 —— 同一道题在更大天花板下写出来的文章反而更短，因为写多少是模型自己定的。
 
 被截断时前端不装没事 —— 消息上会带一条提示，把三种情况分开：
 
@@ -181,7 +181,7 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理的公网地址，默认那套里指的是 Worker 的地址。填了就所有请求都走代理，留空就直接打源站。 |
 | `API_KEY` | `VITE_API_KEY` | Bearer 令牌。代理在服务端注入 key 时它可以是空的。 |
 | `MODEL` | 写死在 `src/config.ts` | `dsv4-flash`。 |
-| `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`32768` 和一个空的系统提示词。 |
+| `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`131072` 和一个空的系统提示词。 |
 
 规则就一句话：**配了代理就走代理，没配浏览器就直接调源站。** 后一半只有在源站给了 CORS 头时才成立，而它没给。
 
