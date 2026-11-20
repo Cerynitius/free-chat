@@ -234,7 +234,7 @@ The runner refuses to fake a success: the workflow probes `/__ping` and fails th
 
 The `runtime` branch is an orphan branch that holds nothing but that one file.
 
-`concurrency` is `group: tunnel` with `cancel-in-progress: true`, so a new run cancels the previous one. The handover leaves a gap of a few seconds, but a new run never has to queue behind a five-hour job.
+The workflow sets no concurrency group, so a new run starts alongside the previous one instead of cancelling it or queueing behind it. The previous round keeps running for another 1.5 hours after the new round has taken the pointer, so both tunnels are online during the handover and the site never sees a gap.
 
 ##### The Worker is the fixed entry point, the tunnel address is a pointer
 
@@ -390,10 +390,9 @@ The build uses a relative base path (`./`), so the same `dist/` directory also w
 
 ### Known limits of the Actions-hosted proxy
 
-The `Tunnel` workflow has to be running for the site to reach the model. Two things about it are worth knowing:
+The `Tunnel` workflow has to be running for the site to reach the model. One thing about it is worth knowing:
 
 - **GitHub stops the schedule after 60 days without activity.** If the repository sees no activity for 60 days, the cron schedule stops firing and the tunnel stops coming up. Push a commit, or start the `Tunnel` workflow by hand from the **Actions** tab, to bring it back.
-- **Each handover has a gap of a few seconds.** The new run cancels the previous one, so the tunnel address changes and the Worker has to pick up the new one. A request that lands in that window can fail; after it, everything is back to normal.
 
 ### Self-hosting
 

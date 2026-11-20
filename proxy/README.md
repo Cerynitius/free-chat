@@ -146,9 +146,10 @@ The run fails when the runner cannot reach the origin: the workflow probes
 `/__ping` and requires `"reachable": true` in the answer, so a tunnel that came
 up but cannot reach the upstream never passes as a success.
 
-`concurrency` is `group: tunnel` with `cancel-in-progress: true`, so a new run
-cancels the previous one. The handover leaves a gap of a few seconds, but a new
-run never has to queue behind a five-hour job.
+The workflow sets no concurrency group, so a new run starts alongside the
+previous one instead of cancelling it or queueing behind it. The previous round
+keeps running for another 1.5 hours after the new round has taken the pointer,
+so both tunnels are online during the handover and the site sees no gap.
 
 A Cloudflare Worker sits in front of the tunnel as the fixed entry point:
 
@@ -160,8 +161,8 @@ The Worker never changes address. It reads the current tunnel address from the
 pointer file on the `runtime` branch, so a new tunnel reaches it within 30
 seconds and neither the Worker nor the site has to be redeployed.
 
-Two limits to know about: GitHub stops scheduled workflows after 60 days
-without repository activity, and every handover leaves a gap of a few seconds.
+One limit to know about: GitHub stops scheduled workflows after 60 days
+without repository activity.
 
 ### 2. Local Node server (development)
 
