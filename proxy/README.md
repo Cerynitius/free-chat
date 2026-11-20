@@ -64,17 +64,11 @@ All platforms inject the same three variables:
 | `API_KEY` | *(unset)* | Bearer token injected into upstream requests. **If set, it overrides whatever the client sent.** If unset, the client's `Authorization` header is passed through unchanged. |
 | `ALLOWED_ORIGINS` | *(empty)* | Comma-separated `Origin` allowlist. Empty means allow everything (`*`). When non-empty, only listed origins get an `Access-Control-Allow-Origin` header — for any other origin the header is simply omitted, and the browser does the blocking. |
 
-### The API key never reaches the browser
+### The proxy's own key never reaches the browser
 
-The key lives in the proxy's environment (or as an encrypted platform secret)
-and is injected server-side on every upstream request. The frontend's proxy
-mode does not send an `Authorization` header at all — it asks `/__ping` whether
-the proxy has a key (`hasKey`), and only sends its own key if the proxy
-reports it does not.
+The key lives in the proxy's environment (or as an encrypted platform secret) and is injected server-side on every upstream request. The frontend always sends its own Authorization header; when the proxy holds a key it overrides whatever arrived, so the two never conflict. The guarantee here is that the proxy's key never leaves the server.
 
-Direct mode (no proxy) cannot offer this guarantee: a key baked into a
-JavaScript bundle is readable by anyone who opens DevTools. That is why proxy
-mode is the recommended setup for the GitHub Pages deployment.
+Calling the origin directly cannot offer this guarantee: a key baked into a JavaScript bundle is readable by anyone who opens DevTools. That is why the proxy is the recommended setup for the GitHub Pages deployment.
 
 ---
 
