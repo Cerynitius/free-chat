@@ -27,7 +27,6 @@ export function App(): React.ReactElement {
   const updateSettings = useApp((s) => s.updateSettings)
   const sendMessage = useApp((s) => s.sendMessage)
   const stopGeneration = useApp((s) => s.stopGeneration)
-  const selectConversation = useApp((s) => s.selectConversation)
   const importConversation = useApp((s) => s.importConversation)
   const newConversation = useApp((s) => s.newConversation)
   const testConnection = useApp((s) => s.testConnection)
@@ -123,11 +122,8 @@ export function App(): React.ReactElement {
     const shared = pendingShare
     setPendingShare(null)
     if (!shared) return
+    // importConversation 自己会把新会话插到列表首位并把 activeId 指向它
     importConversation(shared)
-    // 导入的会话被插在列表第一位 —— 这里补一次选中，
-    // 因为 importConversation 生成的 id 和它写回的 activeId 对不上。
-    const first = useApp.getState().conversations[0]
-    if (first) selectConversation(first.id)
   }
 
   const onDiscardShared = (): void => {
