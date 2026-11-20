@@ -38,6 +38,17 @@ function readKey() {
   return ''
 }
 
+/** gh 不一定在 PATH 里（尤其是从 Node 子进程调起的时候）—— 常见的安装位置都试一遍 */
+function ghPath() {
+  if (process.env.GH_PATH) return process.env.GH_PATH
+  const candidates = [
+    'C:/Program Files/GitHub CLI/gh.exe',
+    'C:/Program Files (x86)/GitHub CLI/gh.exe',
+  ]
+  for (const c of candidates) if (existsSync(c)) return c
+  return 'gh'
+}
+
 function cloudflaredPath() {
   const local = join(here, process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared')
   return existsSync(local) ? local : 'cloudflared'
@@ -67,15 +78,15 @@ function onUrl(url) {
   console.log('[tunnel] 隧道地址: ' + url)
   if (!SYNC || url === synced) return
   synced = url
-  run('gh', ['variable', 'set', 'VITE_PROXY_URL', '--body', url, '--repo', REPO])
-    .then(() => run('gh', ['workflow', 'run', 'deploy.yml', '--repo', REPO, '--ref', 'main']))
+  run(ghPath(), ['variable', 'set', 'VITE_PROXY_URL', '--body', url, '--repo', REPO])
+    .then(() => run(ghPath(), ['workflow', 'run', 'deploy.yml', '--repo', REPO, '--ref', 'main']))
     .then(() => console.log('[tunnel] 已同步仓库变量并触发部署'))
     .catch((e) => console.error('[tunnel] 同步失败：' + e.message))
 }
 
 function run(cmd, args) {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err, stdout, stderr) => {
+    execFile(cmd, args, { cwd: root, windowsHide: true }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || stdout || err.message))
       else resolve(stdout)
     })

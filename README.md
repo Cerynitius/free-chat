@@ -9,6 +9,8 @@
 ![Deploy GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![Deploy to Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
+The Cloudflare button deploys the proxy to Cloudflare Workers, which **does not work for this upstream**: the upstream is a bare IP with an IP-only certificate, and the Workers edge refuses to connect to it. Use the tunnel instead, and see [Why this proxy cannot run on Cloudflare Workers](#workers).
+
 A ready-to-use streaming chat client for `dsv4-flash`, with a collapsible reasoning panel, code highlighting, KaTeX math, and full mobile support.
 
 <a id="intro"></a>
@@ -19,6 +21,8 @@ A ready-to-use streaming chat client for `dsv4-flash`, with a collapsible reason
 There is no configuration screen and no model picker. The origin URL, the model id, the API key, the sampling parameters, and the default reasoning effort all live in `src/config.ts`, which is the single source of truth. Only two things stay adjustable at runtime: the theme and the reasoning effort.
 
 The upstream speaks the OpenAI chat-completions protocol over Server-Sent Events and is perfectly usable from `curl`, but it serves no CORS headers at all, so a browser page cannot talk to it directly. The repository therefore ships a zero-dependency reverse proxy in `proxy/` that fixes the three things a browser needs: it answers the CORS preflight itself, injects the API key from the server side, and streams the SSE response through untouched.
+
+That upstream is reached over TLS at a bare IP address, and its certificate names only that IP. Every deployment constraint in this repository follows from that one fact: the proxy has to run somewhere with unrestricted network access, and Cloudflare Workers is not such a place. See [Why this proxy cannot run on Cloudflare Workers](#workers).
 
 Everything in this repository is static: the built output is plain HTML, CSS, and JavaScript that can be served from GitHub Pages or any static file server. There is no backend of its own, no database, and no account system.
 
@@ -53,6 +57,8 @@ cd hippocrenes-model-chat
 npm install
 ```
 
+### Chat on your own machine
+
 Linux and macOS:
 
 ```bash
@@ -81,7 +87,44 @@ Open `http://localhost:5173` and start typing. That is the whole setup: `npm ins
 
 If you only want to work on the interface, the frontend runs fine on its own and simply reports the connection error until a proxy is running.
 
-To publish it, push the repository to GitHub and let the included workflow build and deploy it.
+### Make the published site work too
+
+The proxy above is only reachable from your own machine. To let the site on GitHub Pages reach it, expose it through a Cloudflare quick tunnel:
+
+```bash
+npm run tunnel
+```
+
+`npm run tunnel` starts the local proxy, opens a `cloudflared` tunnel to it, and publishes the resulting `https://<random>.trycloudflare.com` address into the repository variable `VITE_PROXY_URL`, then triggers a fresh Pages deployment. The tunnel address changes on every restart, and the site follows it automatically.
+
+It needs two things on the machine:
+
+1. The `cloudflared` binary, about 55 MB, deliberately not committed to the repository. Windows PowerShell:
+
+   ```powershell
+   Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "proxy/cloudflared.exe"
+   ```
+
+   Linux and macOS:
+
+   ```bash
+   curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o proxy/cloudflared
+   chmod +x proxy/cloudflared
+   ```
+
+2. The `gh` CLI, authenticated with `gh auth login`, because the tunnel script uses it to update the repository variable.
+
+Then run it with the key:
+
+```bash
+API_KEY=sk-your-key npm run tunnel
+```
+
+```powershell
+$env:API_KEY = "sk-your-key"; npm run tunnel
+```
+
+To publish the site itself, push the repository to GitHub and let the included workflow build and deploy it.
 
 See [Deployment](#deployment) for the full procedure.
 
@@ -94,7 +137,8 @@ See [Deployment](#deployment) for the full procedure.
 |---|---|
 | Base URL | `https://182.92.245.176:1920` |
 | Scheme | HTTPS only. Plain HTTP to that port is rejected by nginx. |
-| Certificate | A valid Let's Encrypt IP certificate whose SAN contains the IP address, so browsers accept it without a warning and no certificate workaround is needed. |
+| Entry point | A bare IP address. There is no domain name for this upstream. |
+| Certificate | A valid Let's Encrypt IP certificate whose SAN contains the IP address and no DNS name, so browsers accept it without a warning and no certificate workaround is needed. |
 | Allowed routes | `POST /v1/chat/completions`, `GET /v1/models`, `GET /health`. Every other path returns `403`. |
 | Authentication | `Authorization: Bearer <key>` on every request. |
 | Streaming | Mandatory. `stream: false` is rejected with `400 stream_required`. |
@@ -141,39 +185,81 @@ Two independent failures are stacked on top of each other:
 1. **The preflight never reaches a CORS handler.** Any request that carries `Authorization` or `Content-Type: application/json` triggers an `OPTIONS` preflight first. The upstream's nginx authenticates every request, including the preflight, and answers `401` with an HTML error page. The browser stops there and never sends the real request.
 2. **The real responses carry no CORS headers.** Even if the preflight were bypassed, a `GET /v1/models` would come back `200` and then be discarded by the browser, because the response has no `Access-Control-Allow-Origin`. From JavaScript, a discarded response is indistinguishable from a network failure: the console only says "Failed to fetch".
 
-There are three ways out. Paths A and B need nothing from the server operator.
+### Why this proxy cannot run on Cloudflare Workers
 
-#### A. Local proxy (no registration, recommended)
+<a id="workers"></a>
 
-The `proxy/` directory holds a portable, zero-dependency proxy. `npm run proxy` starts it on `127.0.0.1:8787`, reading the key from `API_KEY`. It answers the preflight locally with `204`, adds the missing CORS headers to every response, injects the key server-side, and forwards the SSE body as a live stream rather than buffering it.
+This was measured, not assumed. Every configuration of the Workers deployment fails against this upstream:
 
-The same core also runs on Deno Deploy and Vercel Edge Functions; see `proxy/README.md`.
+| Attempt | Result |
+|---|---|
+| `fetch()` straight to the bare IP | `HTTP 403` with Cloudflare error `1003`. The edge does not connect to IP addresses. |
+| `fetch()` to a wildcard DNS name pointing at the same IP (`nip.io`, `sslip.io`) | `HTTP 526 Invalid SSL Certificate`. The certificate names the IP, not the host. |
+| `resolveOverride`, in either direction | `1003` and `526` again. |
+| The IP in other spellings: IPv4-mapped IPv6, trailing dot, octal, hexadecimal | `1003` every time. The edge normalizes the address before it checks it. |
+| `cloudflare:sockets` on the free plan | Plain TCP connects, but `secureTransport: 'on'` silently degrades to cleartext and the upstream answers `400 The plain HTTP request was sent to HTTPS port`. `startTls()` throws. TLS over sockets needs the Workers Paid plan. |
 
-#### B. Cloudflare Workers (public deployment)
+The rule that falls out of this is short: **the proxy has to run on a machine with unrestricted network access** — an ordinary container or a virtual machine. The Workers files are still in `proxy/` and still work for an upstream that has a domain name; against this one they do not apply.
 
-The same core adapts to Cloudflare Workers, and the API key is stored as an encrypted Worker secret that the browser can never read.
+### Where the proxy runs
+
+Three ways to host it, in the order they are worth trying. None of them needs anything from the server operator.
+
+#### A. Local proxy behind a Cloudflare quick tunnel (no registration)
+
+This is what the published site runs on today. The chain is:
+
+```
+browser -> GitHub Pages -> tunnel (trycloudflare.com) -> local proxy -> upstream
+```
+
+`npm run tunnel` drives the whole chain: it starts the local proxy (`proxy/server.mjs`, key from `API_KEY`), starts `cloudflared tunnel --url http://127.0.0.1:8787`, reads the resulting `https://<random>.trycloudflare.com` address out of the log, writes it into the repository variable `VITE_PROXY_URL` with the `gh` CLI, and triggers the Pages deployment. The tunnel address changes on every restart, and the site follows it automatically, so nothing has to be edited by hand.
+
+Prerequisites are the `cloudflared` binary and an authenticated `gh` CLI (`gh auth login`). The download command is in [Quick Start](#quickstart).
+
+Measured on the running tunnel:
+
+| Check | Result |
+|---|---|
+| `GET /__ping` | `reachable: true`, `hasKey: true`, `latencyMs` between 29 and 134 |
+| CORS preflight | `204` with `Access-Control-Allow-Origin: *` |
+| SSE stream | 90 frames spread between 2745 ms and 3912 ms, so it is a real stream and not one buffered blob |
+| The published site | Chats normally |
+
+#### B. Hosted platform (Vercel or Deno Deploy)
+
+Free quotas, but both need an account.
+
+On Vercel, use the **Node** runtime, not Edge. An Edge function runs on an edge node; a Node function runs in a real container, and only a real container can be relied on to reach a bare IP on a non-standard port. The project root is the `proxy/` directory, the entry point is `proxy/api/index.js`, and `proxy/vercel.json` rewrites every path to it.
 
 ```bash
 cd proxy
-npm install
-npx wrangler login
-npx wrangler secret put API_KEY     # type the key when prompted
-npx wrangler deploy
+npx vercel --prod
 ```
 
-You end up with a `https://<your-subdomain>.workers.dev` address. Put that into the repository variable `VITE_PROXY_URL` and rebuild: from then on the frontend talks to your proxy instead of the origin. The key now lives in the Worker secret, so the browser never carries it.
+Set `API_KEY` as a project environment variable in the Vercel dashboard. `UPSTREAM` and `ALLOWED_ORIGINS` have working defaults.
 
-[![Deploy to Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
-
-Check the deployment with a real probe:
+On Deno Deploy, `proxy/deno.ts` is the entry point:
 
 ```bash
-curl https://<your-subdomain>.workers.dev/__ping
+deno deploy --project=<your-project> deno.ts
 ```
 
-#### C. Direct connection to the origin (optional, needs an administrator)
+Set `UPSTREAM`, `API_KEY`, and `ALLOWED_ORIGINS` in the Deno Deploy dashboard.
 
-The origin needs no change to work with paths A and B. This section is only for administrators who want browsers to reach the origin without running a proxy of their own; nothing in this repository depends on it. If you would rather let browsers call it directly, add the following to the `listen 1920 ssl;` server block:
+#### C. Your own server
+
+The most predictable option, and the one to pick for anything long-lived.
+
+```bash
+API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
+```
+
+Put a TLS-terminating reverse proxy in front of it and keep the whole chain on HTTPS: a page loaded over HTTPS cannot call an `http://` endpoint (mixed content), and the key would otherwise cross the network in clear text.
+
+#### Appendix: direct connection to the origin (optional, needs an administrator)
+
+The origin needs no change to work with any of the paths above. This section is only for administrators who want browsers to reach the origin without running a proxy of their own; nothing in this repository depends on it, and the proxy stays the simpler option. If you would rather let browsers call it directly, add the following to the `listen 1920 ssl;` server block:
 
 ```nginx
     # 预检短路：server 级 if 在 rewrite 阶段执行，早于 access(鉴权) 阶段
@@ -219,7 +305,7 @@ Two places the key can live:
 
 | Location | Visible to the browser | Recommendation |
 |---|---|---|
-| Worker secret (proxy mode) | No. The key is injected server-side on every upstream request and overrides whatever the client sent. | Recommended |
+| Proxy secret (server side, proxy mode) | No. The key is injected server-side on every upstream request and overrides whatever the client sent. | Recommended |
 | Build-time repository secret `VITE_API_KEY` (Pages) | Yes. The value ends up in the public bundle. | Acceptable only if the key is rotated regularly and scoped narrowly |
 
 The proxy injects the key on every upstream request, so the frontend does not need a key of its own. If the proxy has no key configured, the client's own `VITE_API_KEY` header is passed through unchanged.
@@ -235,7 +321,18 @@ The repository ships with a workflow that builds and publishes automatically.
 
 1. **Push the repository to GitHub.** The target repository is `https://github.com/JiHuiYiYou/hippocrenes-model-chat`.
 2. **Add the repository secret.** Under **Settings**, then **Secrets and variables**, then **Actions**, create a repository secret named `VITE_API_KEY` and put the upstream key in it. The secret is injected at build time and never lands in the repository.
-3. **Add the repository variable.** Create a repository variable named `VITE_PROXY_URL` and set it to the address of your proxy, for example `https://hippocrenes-model-chat-proxy.<your-subdomain>.workers.dev`. This is the one setting that tells the built site where to send its requests. Without it the site calls the origin directly and the browser discards every response, because the origin serves no CORS headers. Leave it unset only if you host the site somewhere the origin is reachable with CORS headers.
+3. **Add the repository variable.** Create a repository variable named `VITE_PROXY_URL` and set it to the **public address of your proxy** — the address a browser can reach, not a local one. This is the one setting that tells the built site where to send its requests. Without it the site calls the origin directly and the browser discards every response, because the origin serves no CORS headers. Leave it unset only if you host the site somewhere the origin is reachable with CORS headers.
+
+   The address comes from whichever way you host the proxy:
+
+   | Where the proxy runs | What to put in `VITE_PROXY_URL` |
+   |---|---|
+   | Local proxy behind a Cloudflare quick tunnel | The `https://<random>.trycloudflare.com` address printed by `npm run tunnel`. The script writes it into the variable for you. |
+   | Vercel | `https://<your-project>.vercel.app` |
+   | Deno Deploy | `https://<your-project>.deno.dev` |
+   | Your own server | `https://proxy.example.com`, the address in front of your TLS-terminating reverse proxy |
+
+   A tunnel address is temporary: it changes whenever the tunnel restarts. `npm run tunnel` handles that by rewriting the variable and redeploying the site, so the site keeps working as long as the tunnel runs.
 4. **Enable Pages.** The workflow uses `enablement: true`, so the site is created automatically on the first run. You can also set it manually under **Settings**, then **Pages**, with **GitHub Actions** as the source.
 5. **Push to `main`.** The `Deploy to GitHub Pages` workflow builds the site and publishes it. The result is served from a URL of the form `https://<user>.github.io/<repo>/`.
 
@@ -249,7 +346,7 @@ The build output in `dist/` is a static site with no server-side requirement. Se
 API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 ```
 
-Build the site with the proxy address baked in, so the browser talks to the proxy rather than the origin:
+Build the site with the proxy's public address baked in, so the browser talks to the proxy rather than the origin:
 
 ```bash
 VITE_PROXY_URL=https://proxy.example.com npm run build
@@ -350,6 +447,7 @@ No gradients, no glow, no glassmorphism, and no emoji anywhere in the interface.
 npm install        # install dependencies
 npm run dev        # dev server on http://localhost:5173
 npm run proxy      # local proxy on http://127.0.0.1:8787
+npm run tunnel     # local proxy plus a Cloudflare quick tunnel, synced to the repository
 npm run typecheck  # TypeScript, no emit
 npm run build      # type check plus production build into dist/
 npm run preview    # serve the production build locally
@@ -375,8 +473,11 @@ hippocrenes-model-chat/
 ├── proxy/
 │   ├── handler.js        # common core: CORS, key injection, SSE passthrough
 │   ├── server.mjs        # Node runner
+│   ├── tunnel.mjs        # local proxy plus a Cloudflare quick tunnel
 │   ├── deno.ts           # Deno Deploy entry point
+│   ├── api/index.js      # Vercel entry point on the Node runtime
 │   ├── vercel/edge.ts    # Vercel Edge entry point
+│   ├── vercel.json       # Vercel routing
 │   └── wrangler.toml     # Cloudflare Workers configuration
 ├── tools/
 │   └── check-readme-parity.mjs

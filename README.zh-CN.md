@@ -9,6 +9,8 @@
 ![部署 GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![一键部署到 Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
+这个 Cloudflare 按钮部署的是 Cloudflare Workers 版代理，**对当前这个上游不适用**：上游是裸 IP，证书只有 IP SAN，Workers 的边缘节点连不上。请改用隧道方案，详见[为什么这个代理跑不了在 Cloudflare Workers 上](#workers)。
+
 一个给 `dsv4-flash` 用的开箱即用流式对话客户端，带独立可折叠的思考面板、代码高亮、KaTeX 公式，手机和桌面都能用。
 
 <a id="intro"></a>
@@ -19,6 +21,8 @@
 没有配置界面，也没有模型选择器。源站地址、模型 id、API key、采样参数、默认思考档位全部写在 `src/config.ts` 里，那是唯一的真相源。运行时只有两样东西还能调：主题和思考档位。界面文案目前是中文的。
 
 上游用 Server-Sent Events 讲 OpenAI 的 chat-completions 协议，用 `curl` 完全正常，但它一个 CORS 响应头都不给，浏览器页面没法直接调。所以仓库里带了一份零依赖的反向代理，放在 `proxy/` 目录下，专门解决浏览器需要的三件事：自己应答 CORS 预检、在服务端注入 API key、把 SSE 原样流式透传。
+
+这个上游只能通过「TLS + 裸 IP」访问，证书里也只写了那个 IP，没有域名。仓库里所有部署上的限制都从这一条事实推出来：代理必须跑在一台有完整网络访问权的机器上，而 Cloudflare Workers 不是这样的地方。详见[为什么这个代理跑不了在 Cloudflare Workers 上](#workers)。
 
 这个仓库里全是静态的东西：构建产物就是纯 HTML、CSS 和 JavaScript，扔到 GitHub Pages 或者任意静态服务器都能跑。没有自带的后端，没有数据库，也没有账号体系。
 
@@ -53,6 +57,8 @@ cd hippocrenes-model-chat
 npm install
 ```
 
+### 在自己电脑上用
+
 Linux 与 macOS：
 
 ```bash
@@ -81,7 +87,44 @@ npm run dev
 
 只改界面的话前端自己也能跑，只是没起代理之前会报连接错误。
 
-要发布的话，把仓库推到 GitHub，仓库里自带的 workflow 会自动构建并发布。
+### 让线上站点也能连上
+
+上面那个代理只有你自己访问得到。要让 GitHub Pages 上的站点也能用到它，就用 Cloudflare 快速隧道把它暴露出去：
+
+```bash
+npm run tunnel
+```
+
+`npm run tunnel` 会起本地代理、开一条 `cloudflared` 隧道，把拿到的 `https://<随机串>.trycloudflare.com` 地址写进仓库变量 `VITE_PROXY_URL`，再触发一次 Pages 重新部署。隧道地址每次重启都会变，站点会自动跟上。
+
+它需要机器上有两样东西：
+
+1. `cloudflared` 二进制，约 55 MB，故意不入库。Windows PowerShell：
+
+   ```powershell
+   Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "proxy/cloudflared.exe"
+   ```
+
+   Linux 与 macOS：
+
+   ```bash
+   curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o proxy/cloudflared
+   chmod +x proxy/cloudflared
+   ```
+
+2. `gh` 命令行工具，并且执行过 `gh auth login` —— 隧道脚本靠它更新仓库变量。
+
+然后带上 key 跑起来：
+
+```bash
+API_KEY=sk-your-key npm run tunnel
+```
+
+```powershell
+$env:API_KEY = "sk-your-key"; npm run tunnel
+```
+
+要发布站点本身，把仓库推到 GitHub，仓库里自带的 workflow 会自动构建并发布。
 
 完整流程见[部署](#deploy)一节。
 
@@ -94,7 +137,8 @@ npm run dev
 |---|---|
 | 基址 | `https://182.92.245.176:1920` |
 | 协议 | 只能 https。这个端口上的明文 http 会被 nginx 挡掉。 |
-| 证书 | 有效的 Let's Encrypt IP 证书，SAN 里含这个 IP，浏览器直接认，没有证书告警，也不需要任何证书绕过手段。 |
+| 入口 | 裸 IP，没有域名。 |
+| 证书 | 有效的 Let's Encrypt IP 证书，SAN 里含这个 IP，不含任何 DNS 名，浏览器直接认，没有证书告警，也不需要任何证书绕过手段。 |
 | 放行的路由 | `POST /v1/chat/completions`、`GET /v1/models`、`GET /health`。其余路径一律 `403`。 |
 | 鉴权 | 每个请求都要带 `Authorization: Bearer <key>`。 |
 | 流式 | 强制要求。`stream: false` 会直接被 `400 stream_required` 挡掉。 |
@@ -141,39 +185,81 @@ POST /v1/chat/completions  ->  同样零 CORS 头
 1. **预检根本没走到 CORS 处理器。** 凡是带了 `Authorization` 或者 `Content-Type: application/json` 的请求都要先过一遍 `OPTIONS` 预检。上游的 nginx 对每个请求都鉴权，预检也不例外，直接回 `401` 加一个 HTML 错误页。浏览器到这儿就停了，真正的请求压根不会发出去。
 2. **真实响应里也没有 CORS 头。** 就算预检被绕过去了，`GET /v1/models` 会带着 `200` 回来，然后被浏览器丢掉——因为响应里没有 `Access-Control-Allow-Origin`。在 JavaScript 看来，被丢掉的响应和网络失败长得一模一样：控制台里只有一句 "Failed to fetch"。
 
-出路有三条。A 和 B 两条都不需要服务器管理员配合。
+### 为什么这个代理跑不了在 Cloudflare Workers 上
 
-#### A、本地代理（零注册，推荐先用这条）
+<a id="workers"></a>
 
-`proxy/` 目录里是一份可移植、零依赖的代理。`npm run proxy` 就能起，默认 `127.0.0.1:8787`，key 从 `API_KEY` 读。它自己本地应答预检并回 `204`，给每个响应补上缺失的 CORS 头，在服务端注入 key，然后把 SSE 当活流转发，不攒着。
+这是实测出来的，不是推测。Workers 部署的每一种配置，对上这个上游都走不通：
 
-同一份核心还能跑在 Deno Deploy 和 Vercel Edge 上，详见 `proxy/README.md`。
+| 试法 | 结果 |
+|---|---|
+| `fetch()` 直接打裸 IP | `HTTP 403`，Cloudflare 错误码 `1003`。边缘节点不直连 IP。 |
+| `fetch()` 打指向同一个 IP 的通配域名（`nip.io`、`sslip.io`） | `HTTP 526 Invalid SSL Certificate`。证书写的是 IP，不是主机名。 |
+| `resolveOverride`，两个方向都试了 | 还是 `1003` 和 `526`。 |
+| IP 的其它写法：IPv4 映射的 IPv6、尾点、八进制、十六进制 | 一律 `1003`。边缘节点在校验之前就把地址归一化了。 |
+| 免费版上的 `cloudflare:sockets` | 普通 TCP 能连上，但 `secureTransport: 'on'` 会静默降级成明文，上游回 `400 The plain HTTP request was sent to HTTPS port`；`startTls()` 直接报错。sockets 上的 TLS 需要 Workers Paid 版。 |
 
-#### B、Cloudflare Workers（公开部署）
+于是规矩很简单：**代理必须跑在一台有完整网络访问权的机器上** —— 普通容器或虚机都行。Workers 那套文件还留在 `proxy/` 里，上游换成有域名的服务时照样能用；对现在这个上游不适用。
 
-同一份核心适配了 Cloudflare Workers，API key 存成加密的 Worker secret，浏览器永远读不到。
+### 代理跑在哪
+
+三种放法，按值得尝试的顺序排。三种都不需要服务器管理员配合。
+
+#### A、本机代理 + Cloudflare 快速隧道（零注册）
+
+线上站点现在跑的就是这条。整条链路是：
+
+```
+浏览器 -> GitHub Pages -> 隧道(trycloudflare.com) -> 本机代理 -> 源站
+```
+
+`npm run tunnel` 把整条链路串起来：起本地代理（`proxy/server.mjs`，key 从 `API_KEY` 读），起 `cloudflared tunnel --url http://127.0.0.1:8787`，从日志里解析出 `https://<随机串>.trycloudflare.com` 地址，用 `gh` 命令行把它写进仓库变量 `VITE_PROXY_URL`，再触发 Pages 部署。隧道地址每次重启都会变，站点自动跟上，手工不用改任何配置。
+
+前提是机器上有 `cloudflared` 二进制，以及装好并登录过的 `gh` 命令行（`gh auth login`）。下载命令见[快速开始](#quickstart)。
+
+在跑着的隧道上实测：
+
+| 检查项 | 结果 |
+|---|---|
+| `GET /__ping` | `reachable: true`、`hasKey: true`，`latencyMs` 在 29 到 134 之间 |
+| CORS 预检 | `204`，带 `Access-Control-Allow-Origin: *` |
+| SSE 流 | 90 帧铺在 2745 毫秒到 3912 毫秒之间，是真流式，不是一坨攒完再吐 |
+| 线上站点 | 能正常对话 |
+
+#### B、托管平台（Vercel 或 Deno Deploy）
+
+都有免费额度，但都要注册账号。
+
+Vercel 上要用 **Node** 运行时，不要用 Edge。Edge 函数跑在边缘节点，Node 函数跑在真容器里，只有真容器才能稳定直连裸 IP 的非标准端口。项目根目录就是 `proxy/` 目录，入口是 `proxy/api/index.js`，`proxy/vercel.json` 把所有路径都转到它。
 
 ```bash
 cd proxy
-npm install
-npx wrangler login
-npx wrangler secret put API_KEY     # 按提示输入 key
-npx wrangler deploy
+npx vercel --prod
 ```
 
-部署完会拿到一个 `https://<你的子域名>.workers.dev` 地址。把它填进仓库变量 `VITE_PROXY_URL` 再重新构建，之后前端就只找你的代理，不再直接打源站。key 此刻在 Worker secret 里，浏览器完全接触不到。
+在 Vercel 控制台把 `API_KEY` 设成项目环境变量。`UPSTREAM` 和 `ALLOWED_ORIGINS` 有可用的默认值。
 
-[![一键部署到 Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
-
-用真探针验一下部署：
+Deno Deploy 上入口是 `proxy/deno.ts`：
 
 ```bash
-curl https://<你的子域名>.workers.dev/__ping
+deno deploy --project=<your-project> deno.ts
 ```
 
-#### C、直连源站（可选，需要管理员改 nginx）
+在 Deno Deploy 控制台设 `UPSTREAM`、`API_KEY`、`ALLOWED_ORIGINS`。
 
-源站不改也能用 A 和 B。这一节只写给想让浏览器不靠代理直接访问源站的管理员，本仓库的任何部分都不依赖它。如果确实想让浏览器直接调源站，把下面这段加到 `listen 1920 ssl;` 那个 server 块里：
+#### C、自己的服务器
+
+最稳的一种，长跑的服务选它。
+
+```bash
+API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
+```
+
+前面再套一层做 TLS 终止的反向代理。整条链必须留在 HTTPS 上：HTTPS 加载的页面不允许调用 `http://` 的接口（混合内容），而且 key 会以明文过网络。
+
+#### 附录：直连源站（可选，需要管理员改 nginx）
+
+源站不改也能用上面任意一条路。这一节只写给想让浏览器不靠代理直接访问源站的管理员，本仓库的任何部分都不依赖它，而且代理其实是更省事的选择。如果确实想让浏览器直接调源站，把下面这段加到 `listen 1920 ssl;` 那个 server 块里：
 
 ```nginx
     # 预检短路：server 级 if 在 rewrite 阶段执行，早于 access(鉴权) 阶段
@@ -219,7 +305,7 @@ key 可以放在两个地方：
 
 | 存放位置 | 浏览器能看见吗 | 建议 |
 |---|---|---|
-| Worker secret（代理模式） | 不能。key 由服务端在每次上游请求时注入，并且会覆盖客户端发来的那份 | 推荐 |
+| 代理侧的 secret（代理模式） | 不能。key 由服务端在每次上游请求时注入，并且会覆盖客户端发来的那份 | 推荐 |
 | 构建期仓库 secret `VITE_API_KEY`（Pages） | 能。值会出现在公开的 bundle 里 | 只能接受，前提是定期轮换、权限收窄 |
 
 代理会在每次上游请求时注入 key，所以前端自己不需要 key。代理那边没配 key 的时候，客户端那份 `VITE_API_KEY` 头才会原样透传上去。
@@ -235,7 +321,18 @@ key 可以放在两个地方：
 
 1. **把仓库推到 GitHub。** 目标仓库是 `https://github.com/JiHuiYiYou/hippocrenes-model-chat`。
 2. **加仓库 secret。** 在仓库的**设置**、**Secrets and variables**、**Actions** 里新建一个仓库 secret，名字叫 `VITE_API_KEY`，把上游 key 填进去。这个 secret 在构建期注入，绝不会进仓库。
-3. **加仓库变量。** 新建一个仓库变量 `VITE_PROXY_URL`，填你的代理地址，例如 `https://hippocrenes-model-chat-proxy.<你的子域名>.workers.dev`。这是唯一决定构建产物往哪儿发请求的开关。不填的话，站点会直接调源站，而源站一个 CORS 头都不给，浏览器会把每个响应都丢掉。只有当你把站点部署在「能带着 CORS 头访问源站」的地方时，才可以不填。
+3. **加仓库变量。** 新建一个仓库变量 `VITE_PROXY_URL`，填**你代理的公网地址** —— 浏览器访问得到的那个地址，不是本机地址。这是唯一决定构建产物往哪儿发请求的开关。不填的话，站点会直接调源站，而源站一个 CORS 头都不给，浏览器会把每个响应都丢掉。只有当你把站点部署在「能带着 CORS 头访问源站」的地方时，才可以不填。
+
+   这个地址从你选的代理放法来：
+
+   | 代理跑在哪 | `VITE_PROXY_URL` 填什么 |
+   |---|---|
+   | 本机代理 + Cloudflare 快速隧道 | `npm run tunnel` 打出来的 `https://<随机串>.trycloudflare.com` 地址。脚本会自己把它写进这个变量。 |
+   | Vercel | `https://<你的项目名>.vercel.app` |
+   | Deno Deploy | `https://<你的项目名>.deno.dev` |
+   | 自己的服务器 | `https://proxy.example.com`，也就是 TLS 终止反向代理对外的那个地址 |
+
+   隧道地址是临时的：隧道一重启就换。`npm run tunnel` 会负责改写这个变量并重新部署站点，所以只要隧道还开着，站点就一直能用。
 4. **启用 Pages。** workflow 用的是 `enablement: true`，第一次跑就会把站点建出来。也可以自己在**设置**、**Pages** 里手动选 GitHub Actions 作为来源。
 5. **推 `main` 分支。** `Deploy to GitHub Pages` 这条 workflow 会构建并发布，站点地址形如 `https://<用户名>.github.io/<仓库名>/`。
 
@@ -249,7 +346,7 @@ key 可以放在两个地方：
 API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 ```
 
-构建的时候把代理地址编进去，浏览器才会找代理而不是找源站：
+构建的时候把代理的公网地址编进去，浏览器才会找代理而不是找源站：
 
 ```bash
 VITE_PROXY_URL=https://proxy.example.com npm run build
@@ -350,6 +447,7 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 npm install        # 安装依赖
 npm run dev        # 开发服务器，http://localhost:5173
 npm run proxy      # 本地代理，http://127.0.0.1:8787
+npm run tunnel     # 本地代理加 Cloudflare 快速隧道，同步到仓库变量
 npm run typecheck  # TypeScript 检查，不产出文件
 npm run build      # 类型检查加生产构建，产物在 dist/
 npm run preview    # 本地预览生产构建
@@ -375,8 +473,11 @@ hippocrenes-model-chat/
 ├── proxy/
 │   ├── handler.js        # 共享核心：CORS、注入 key、SSE 透传
 │   ├── server.mjs        # Node runner
+│   ├── tunnel.mjs        # 本机代理加 Cloudflare 快速隧道
 │   ├── deno.ts           # Deno Deploy 入口
+│   ├── api/index.js      # Vercel 入口，Node 运行时
 │   ├── vercel/edge.ts    # Vercel Edge 入口
+│   ├── vercel.json       # Vercel 路由
 │   └── wrangler.toml     # Cloudflare Workers 配置
 ├── tools/
 │   └── check-readme-parity.mjs
