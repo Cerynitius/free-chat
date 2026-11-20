@@ -1,15 +1,7 @@
 import { useState } from 'react'
-import {
-  ArrowClockwise,
-  Check,
-  Copy,
-  DownloadSimple,
-  LinkSimple,
-  WarningCircle,
-} from '@phosphor-icons/react'
+import { ArrowClockwise, Check, Copy, WarningCircle } from '@phosphor-icons/react'
 import type { Message } from '@/state/types'
 import { copyText } from '@/lib/clipboard'
-import { formatTokens } from '@/lib/tokens'
 import { Markdown } from './Markdown'
 import { ReasoningPanel } from './ReasoningPanel'
 
@@ -17,16 +9,12 @@ interface Props {
   message: Message
   streaming: boolean
   onRegenerate: () => void
-  onShare: () => void
-  onExport: () => void
 }
 
 export function MessageItem({
   message,
   streaming,
   onRegenerate,
-  onShare,
-  onExport,
 }: Props): React.ReactElement {
   const [copied, setCopied] = useState(false)
 
@@ -104,29 +92,6 @@ export function MessageItem({
           >
             <ArrowClockwise size={15} weight="bold" />
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={onShare}
-            aria-label="分享这条对话"
-            title="分享这条对话"
-          >
-            <LinkSimple size={15} weight="bold" />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={onExport}
-            aria-label="导出为 Markdown"
-            title="导出为 Markdown"
-          >
-            <DownloadSimple size={15} weight="bold" />
-          </button>
-          {message.tokens !== undefined && (
-            <span className="ml-1 font-mono text-[11px] text-faint">
-              约 {formatTokens(message.tokens)} tokens
-            </span>
-          )}
         </div>
       )}
     </div>

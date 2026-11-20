@@ -1,7 +1,6 @@
 import type { AppGet, AppSet, ChatSlice, Conversation, Message, Role } from './types'
-import { ApiError, resolveApiConfig } from '@/lib/api'
+import { ApiError } from '@/lib/api'
 import { runChat } from '@/lib/chat'
-import { estimateMessageTokens } from '@/lib/tokens'
 
 function uid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -103,8 +102,7 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     const ctrl = new AbortController()
     controller = ctrl
 
-    const settings = get().settings
-    const cfg = resolveApiConfig(settings)
+    const effort = get().settings.effort
     const startedAt = performance.now()
     let reasoningStartedAt: number | null = null
     let finishReason: string | null = null
@@ -118,16 +116,9 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
 
     try {
       await runChat({
-        config: cfg,
         messages,
-        model: settings.model,
-        effort: settings.effort,
-        temperature: settings.temperature,
-        topP: settings.topP,
-        maxTokens: settings.maxTokens,
-        systemPrompt: settings.systemPrompt,
+        effort,
         signal: ctrl.signal,
-        proxyHasKey: get().connection.proxyHasKey,
         onReasoning: (chunk) => {
           if (reasoningStartedAt === null) reasoningStartedAt = performance.now()
           push(chunk, 'reasoning')
@@ -145,15 +136,8 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       }
       flush(convId, asstId)
 
-      const finalMsg = get()
-        .conversations.find((c) => c.id === convId)
-        ?.messages.find((m) => m.id === asstId)
-
       patchMessage(convId, asstId, {
         status: 'complete',
-        model: settings.model,
-        effort: settings.effort,
-        tokens: estimateMessageTokens(finalMsg?.content ?? '', finalMsg?.reasoning ?? ''),
         reasoningMs:
           reasoningStartedAt !== null ? Math.round(reasoningStartedAt - startedAt) : undefined,
       })
@@ -215,19 +199,7 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
         }
       }),
 
-    renameConversation: (id, title) =>
-      set((s) => ({
-        conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
-      })),
 
-    importConversation: (c) => {
-      // 存进列表的是新 id，activeId 必须跟着它 —— 指向旧 id 会选到一个不存在的会话
-      const id = uid()
-      set((s) => ({
-        conversations: [{ ...c, id }, ...s.conversations],
-        activeId: id,
-      }))
-    },
 
     sendMessage: async (text) => {
       const trimmed = text.trim()

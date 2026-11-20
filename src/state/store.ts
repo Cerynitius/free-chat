@@ -6,7 +6,7 @@ import { uiSlice } from './uiSlice'
 import { hydrate } from './persist'
 
 export const useApp = create<AppState>()((set, get) => ({
-  ...settingsSlice(set, get),
+  ...settingsSlice(set),
   ...chatSlice(set, get),
   ...uiSlice(set),
 }))

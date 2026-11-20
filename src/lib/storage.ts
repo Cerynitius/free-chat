@@ -5,7 +5,7 @@
  * 不存 AbortController、连接状态、toast —— 那些是运行时状态，刷新就该没了。
  */
 
-const KEY = 'hippocrenes.chat.v1'
+const KEY = 'hippocrenes.chat.v2'
 
 export interface PersistedState {
   conversations: unknown[]

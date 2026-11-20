@@ -10,9 +10,6 @@ interface Props {
   streaming: boolean
   effort: string
   onEffortChange: (v: 'off' | 'none' | 'low' | 'high' | 'max') => void
-  supportedEfforts: string[]
-  model: string
-  hint?: string
 }
 
 export function Composer({
@@ -23,9 +20,6 @@ export function Composer({
   streaming,
   effort,
   onEffortChange,
-  supportedEfforts,
-  model,
-  hint,
 }: Props): React.ReactElement {
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const [focused, setFocused] = useState(false)
@@ -70,12 +64,7 @@ export function Composer({
           />
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              <span className="tag truncate">{model}</span>
-              <EffortPicker
-                value={effort}
-                onChange={onEffortChange}
-                supported={supportedEfforts}
-              />
+              <EffortPicker value={effort} onChange={onEffortChange} />
             </div>
             {streaming ? (
               <button type="button" className="btn btn-icon" onClick={onStop} aria-label="停止生成">
@@ -94,7 +83,7 @@ export function Composer({
             )}
           </div>
         </div>
-        {hint && <div className="mt-2 px-1 text-[12px] text-muted">{hint}</div>}
+
       </div>
     </div>
   )

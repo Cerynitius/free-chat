@@ -3,20 +3,19 @@ import { CaretDown, Check } from '@phosphor-icons/react'
 import type { ReasoningEffort } from '@/state/types'
 
 const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
-  { value: 'off', label: '关闭', hint: '不思考，直接回答' },
-  { value: 'none', label: '无', hint: '同上，留给兼容别的后端' },
-  { value: 'low', label: '低', hint: '轻量思考（服务端默认）' },
-  { value: 'high', label: '高', hint: '完整推理链' },
-  { value: 'max', label: '极限', hint: '最长推理，最慢' },
+  { value: 'off', label: '关闭', hint: '不思考' },
+  { value: 'none', label: '无', hint: '不思考' },
+  { value: 'low', label: '低', hint: '轻量' },
+  { value: 'high', label: '高', hint: '完整推理' },
+  { value: 'max', label: '极限', hint: '最长，最慢' },
 ]
 
 interface Props {
   value: string
   onChange: (v: ReasoningEffort) => void
-  supported: string[]
 }
 
-export function EffortPicker({ value, onChange, supported }: Props): React.ReactElement {
+export function EffortPicker({ value, onChange }: Props): React.ReactElement {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
 
@@ -57,7 +56,6 @@ export function EffortPicker({ value, onChange, supported }: Props): React.React
           className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-md border border-line bg-surface p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
         >
           {OPTIONS.map((o) => {
-            const declared = supported.includes(o.value)
             return (
               <button
                 key={o.value}
@@ -74,10 +72,7 @@ export function EffortPicker({ value, onChange, supported }: Props): React.React
                   {o.value === value && <Check size={12} weight="bold" />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 text-[13px] text-ink">
-                    {o.label}
-                    {declared && <span className="tag text-[10px]">服务端声明</span>}
-                  </span>
+                  <span className="text-[13px] text-ink">{o.label}</span>
                   <span className="block text-[11px] text-muted">{o.hint}</span>
                 </span>
               </button>

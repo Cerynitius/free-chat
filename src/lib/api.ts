@@ -1,9 +1,6 @@
-import type { ApiConfig, ConnectionMode, ModelInfo, Settings } from '@/state/types'
+import { API_KEY, BASE_URL, PROXY_URL } from '@/config'
 
 export type ApiErrorKind = 'network' | 'http' | 'parse' | 'abort'
-
-/** 端点只放行这三个，其余一律 403 —— 代理与直连都一样。 */
-export const ALLOWED_PATHS = ['/v1/chat/completions', '/v1/models', '/health'] as const
 
 export class ApiError extends Error {
   readonly kind: ApiErrorKind
@@ -20,136 +17,44 @@ export class ApiError extends Error {
 }
 
 /**
- * 构建期注入的 key。
+ * 实际要打到哪里。
  *
- * 生产环境由 CI 从仓库 secret VITE_API_KEY 注入 —— key 不进仓库，但会进发到
- * 公网的 bundle（任何人都能在 DevTools 里读到，这是「内置到网页」的必然结果）。
- * 代理模式下浏览器通常不需要它：key 存在代理侧。
+ * 配了代理地址就走代理（代理补 CORS 头），没配就直连源站 ——
+ * 直连能不能成，取决于源站有没有开 CORS（默认没有，会被浏览器拦）。
  */
-export const BUILTIN_KEY = (import.meta.env.VITE_API_KEY ?? '').trim()
-
-/**
- * 构建期注入的默认代理地址。
- * 生产环境可以在仓库变量 VITE_PROXY_URL 里填 Cloudflare Worker 的地址 ——
- * 填了的话，访客打开就是「已配置好」的可用状态，不用先进设置面板。
- */
-export const BUILTIN_PROXY_URL = (import.meta.env.VITE_PROXY_URL ?? '').trim()
-
-/** 源站直连地址 —— 公开信息，直接写死 */
-export const DEFAULT_BASE_URL = 'https://182.92.245.176:1920'
-
-/**
- * 把设置换算成一次请求真正用到的连接参数。
- * key 优先用用户运行时填的，其次回落到构建期注入的内置 key。
- */
-export function resolveApiConfig(settings: Settings): ApiConfig {
-  const key = settings.apiKey.trim() || BUILTIN_KEY
-  return settings.mode === 'proxy'
-    ? { mode: 'proxy', baseUrl: settings.proxyUrl.trim(), apiKey: key }
-    : { mode: 'direct', baseUrl: settings.baseUrl.trim(), apiKey: key }
+export function endpoint(): string {
+  return (PROXY_URL || BASE_URL).replace(/\/+$/, '')
 }
 
-export function normalizeBase(base: string): string {
-  return base.trim().replace(/\/+$/, '')
-}
-
-export function chatEndpoint(cfg: ApiConfig): string {
-  return `${normalizeBase(cfg.baseUrl)}/v1/chat/completions`
-}
-
-export function modelsEndpoint(cfg: ApiConfig): string {
-  return `${normalizeBase(cfg.baseUrl)}/v1/models`
-}
-
-export function pingEndpoint(cfg: ApiConfig): string {
-  return `${normalizeBase(cfg.baseUrl)}/__ping`
+export function chatEndpoint(): string {
+  return `${endpoint()}/v1/chat/completions`
 }
 
 /**
  * 请求头。
  *
- * ★ 代理模式下默认**不带** Authorization —— key 由代理侧的 secret 注入，
- *   浏览器一个字节都拿不到。只有当代理自报「没有配置 key」时（proxyHasKey=false），
- *   才回退发送浏览器侧的 key，这样「代理没配 secret」也不是死路。
+ * key 总是带上：代理侧配了 secret 时它会用自己的覆盖掉，
+ * 没配时正好用这一个 —— 两条路都通。
  */
-export function buildHeaders(cfg: ApiConfig, proxyHasKey?: boolean): Record<string, string> {
+export function buildHeaders(): Record<string, string> {
   const h: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream, application/json',
   }
-  const key = cfg.apiKey.trim()
-  const shouldSend = cfg.mode === 'direct' || !proxyHasKey
-  if (shouldSend && key) h['Authorization'] = `Bearer ${key}`
+  if (API_KEY) h['Authorization'] = `Bearer ${API_KEY}`
   return h
 }
 
-/** GET /v1/models —— 兼做「连接测试」 */
-export async function fetchModels(cfg: ApiConfig, signal?: AbortSignal): Promise<ModelInfo[]> {
-  let res: Response
-  try {
-    res = await fetch(modelsEndpoint(cfg), { headers: buildHeaders(cfg), signal })
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') throw new ApiError('已取消', 'abort')
-    throw new ApiError(
-      `连不上 ${normalizeBase(cfg.baseUrl)}：${(err as Error)?.message ?? '网络错误'}`,
-      'network',
-    )
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new ApiError(describeHttpError(res.status, text), 'http', res.status, extractCode(text))
-  }
-  const json = (await res.json()) as { data?: (ModelInfo | string)[] }
-  const list = json?.data ?? []
-  return list.map((m) => (typeof m === 'string' ? { id: m } : m))
-}
-
-/**
- * GET /__ping —— 代理自检。
- * 只有代理有这个端点；直连源站会 403，所以不是代理时静默返回 null。
- */
-export async function pingProxy(
-  cfg: ApiConfig,
-  signal?: AbortSignal,
-): Promise<{ reachable: boolean; latencyMs: number; error?: string; hasKey?: boolean } | null> {
-  try {
-    const res = await fetch(pingEndpoint(cfg), { headers: buildHeaders(cfg), signal })
-    if (!res.ok) return null
-    const json = (await res.json()) as {
-      reachable?: boolean
-      latencyMs?: number
-      error?: string | null
-      hasKey?: boolean
-    }
-    return {
-      reachable: Boolean(json.reachable),
-      latencyMs: Number(json.latencyMs ?? 0),
-      error: json.error ?? undefined,
-      hasKey: json.hasKey,
-    }
-  } catch {
-    return null
-  }
-}
-
-/** 把 HTTP 错误翻译成人话 */
+/** 把 HTTP 错误翻译成人话 —— 一行，不长篇大论 */
 export function describeHttpError(status: number, body: string): string {
   let msg = ''
   try {
     const j = JSON.parse(body) as { error?: { message?: string } }
     msg = j?.error?.message ?? ''
   } catch {
-    msg = body.slice(0, 160)
+    msg = body.slice(0, 120)
   }
-  const hint =
-    status === 401
-      ? ' —— key 不对；代理模式下则是代理侧还没配置 API_KEY'
-      : status === 403
-        ? ' —— 这个路径源站不允许访问（只开放 /v1/chat/completions、/v1/models、/health）'
-        : status === 400
-          ? ' —— 请求参数不对（注意 stream 必须是 true）'
-          : ''
-  return `HTTP ${status}${hint}${msg ? '：' + msg : ''}`
+  return `HTTP ${status}${msg ? ' · ' + msg : ''}`
 }
 
 export function extractCode(body: string): string | undefined {
@@ -162,24 +67,16 @@ export function extractCode(body: string): string | undefined {
 }
 
 /**
- * 浏览器层面的网络失败（fetch 抛 TypeError）几乎必然是 CORS 拦截：
- * 请求根本没发出去，或者响应根本没让 JS 看见。
- * 这一段文案是整个设置面板最有价值的部分 —— 别让人只看到一句 "Failed to fetch"。
+ * 连不上时的提示 —— 只给一行。
+ *
+ * 浏览器层面的 fetch 失败（TypeError）在直连模式下几乎必然是 CORS：
+ * 请求要么没发出去，要么响应根本没让 JS 看见。
  */
-export function describeConnectionError(err: unknown, mode: ConnectionMode): string {
+export function describeConnectionError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
-  if (mode === 'direct') {
-    return (
-      `连不上源站（${raw}）。` +
-      '浏览器同源策略会拦掉跨源请求 —— 源站没有返回 Access-Control-Allow-Origin，' +
-      '而且 OPTIONS 预检会被它的鉴权层以 401 挡掉。' +
-      '两条出路：① 在设置里切到「代理」模式并填代理地址；' +
-      '② 让服务器管理员在 nginx 里加上 CORS 片段（README 里有现成的）。'
-    )
-  }
-  return (
-    `连不上代理（${raw}）。` +
-    '检查代理地址有没有写错、代理进程是否还在跑、URL 末尾有没有多一个斜杠。' +
-    '本地代理可以用 `npm run proxy` 起一个，然后用 `/__ping` 自检。'
-  )
+  const hint = PROXY_URL
+    ? '检查代理地址与代理是否还在运行'
+    : '源站没有 CORS 头，浏览器会拦掉跨源请求 —— 需要配一个代理地址'
+  console.warn('[chat] 连接失败', err)
+  return `连不上服务 · ${hint}（${raw}）`
 }

@@ -9,14 +9,16 @@
 ![Deploy GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![Deploy to Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
-A DeepSeek-style streaming chat frontend for an OpenAI-compatible SSE endpoint, with a dedicated reasoning panel, code highlighting, KaTeX math, and full mobile support.
+A ready-to-use streaming chat client for `dsv4-flash`, with a collapsible reasoning panel, code highlighting, KaTeX math, and full mobile support.
 
 <a id="intro"></a>
 ## Introduction
 
-**Hippocrene's Model Chat** is a single-page chat client that talks to an OpenAI-compatible streaming endpoint. It is styled after DeepSeek.com: a persistent sidebar on the desktop, a bottom sheet on the phone, a blinking caret while the answer streams in, and a collapsible reasoning panel that shows the model's thinking separately from the answer.
+**Hippocrene's Model Chat** is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer.
 
-The upstream service it targets is `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. That endpoint speaks the OpenAI chat-completions protocol over Server-Sent Events and is perfectly usable from `curl`, but it serves no CORS headers at all, so a browser page cannot talk to it directly. The repository therefore ships a zero-dependency reverse proxy in `proxy/` that fixes the three things a browser needs: it answers the CORS preflight itself, injects the API key from the server side, and streams the SSE response through untouched.
+There is no configuration screen and no model picker. The origin URL, the model id, the API key, the sampling parameters, and the default reasoning effort all live in `src/config.ts`, which is the single source of truth. Only two things stay adjustable at runtime: the theme and the reasoning effort.
+
+The upstream speaks the OpenAI chat-completions protocol over Server-Sent Events and is perfectly usable from `curl`, but it serves no CORS headers at all, so a browser page cannot talk to it directly. The repository therefore ships a zero-dependency reverse proxy in `proxy/` that fixes the three things a browser needs: it answers the CORS preflight itself, injects the API key from the server side, and streams the SSE response through untouched.
 
 Everything in this repository is static: the built output is plain HTML, CSS, and JavaScript that can be served from GitHub Pages or any static file server. There is no backend of its own, no database, and no account system.
 
@@ -25,21 +27,17 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 
 | Area | Capability |
 |---|---|
-| Streaming | Server-Sent Events with a blinking typing caret; output is buffered to 12 flushes per second so long answers stay smooth |
-| Reasoning | `reasoning_content` is rendered in its own collapsible panel, separate from the answer body, with an "thought for X.X seconds" readout |
-| Reasoning effort | Five levels: off, none, low, high, max. Sent as `reasoning_effort`; the server default is `low` |
+| Streaming | Server-Sent Events with a blinking typing caret; output is buffered to about twelve flushes per second so long answers stay smooth |
+| Reasoning | `reasoning_content` is rendered in its own collapsible panel, separate from the answer body, with a readout of how many seconds the model spent thinking |
+| Reasoning effort | Five levels: off, none, low, high, max. Picked from the chip at the bottom-left of the composer and sent as `reasoning_effort`; the default is `low` |
 | Context | Full multi-turn history is sent back with every request |
 | Markdown | GitHub Flavored Markdown including tables, rendered through `markdown-it` and sanitized with DOMPurify |
 | Code | Syntax highlighting for 14 languages, with a working copy button on every code block |
 | Math | KaTeX rendering for inline `$...$` and display `$$...$$` formulas |
-| Actions | Regenerate an answer, stop generation mid-flight, copy an answer, export the whole conversation as Markdown |
+| Actions | Regenerate an answer, stop generation mid-flight, copy an answer |
 | History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; new and delete are supported |
-| Settings | Connection mode, proxy URL, origin URL, API key, model, reasoning effort, temperature, top_p, max_tokens, system prompt, theme, font size |
-| Diagnostics | Connection test plus a proxy self-check against `/__ping`, reporting latency and whether the proxy holds a key |
-| Themes | Light, dark, or follow the system preference |
+| Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
 | Layout | Persistent sidebar on desktop, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
-| Meter | Context usage bar based on a client-side token estimate |
-| Sharing | Conversations are encoded into the URL hash, so sharing needs no backend at all |
 | Responsive | One layout that adapts from narrow phones to wide desktops |
 
 Deliberately out of scope: tool calling (the server does not support it), image input (the API has no vision capability), and multi-model switching (there is a single model).
@@ -47,27 +45,27 @@ Deliberately out of scope: tool calling (the server does not support it), image 
 <a id="quickstart"></a>
 ## Quick Start
 
-There are three ways to get it running. The first one is the fastest path to a working chat.
-
-### 1. Run the local proxy (recommended first run)
-
-The proxy is a portable, zero-dependency Node server. It needs no registration and no account anywhere.
+Clone it, install it, and you are chatting. The local proxy needs no registration and no account anywhere.
 
 ```bash
 git clone https://github.com/JiHuiYiYou/hippocrenes-model-chat.git
 cd hippocrenes-model-chat
 npm install
+```
 
-# Linux and macOS
+Linux and macOS:
+
+```bash
 API_KEY=sk-your-key npm run proxy
 ```
 
+Windows PowerShell:
+
 ```powershell
-# Windows PowerShell
 $env:API_KEY = "sk-your-key"; npm run proxy
 ```
 
-The proxy listens on `127.0.0.1:8787` by default and reads the key from the `API_KEY` environment variable. Confirm it is alive before touching the frontend:
+The proxy listens on `127.0.0.1:8787` and reads the key from the `API_KEY` environment variable. In development the frontend points at that address on its own, so no environment variable is needed on the frontend side. Confirm the proxy is alive before opening the page:
 
 ```bash
 curl http://127.0.0.1:8787/__ping
@@ -79,20 +77,11 @@ Then start the frontend in a second terminal:
 npm run dev
 ```
 
-Open `http://localhost:5173`, open the settings panel, set the connection mode to **Proxy**, and put `http://127.0.0.1:8787` into the proxy URL field. Press the connection test button; the badge in the header turns green when the upstream answers.
+Open `http://localhost:5173` and start typing. That is the whole setup: `npm install && npm run proxy && npm run dev`.
 
-### 2. Local development
+If you only want to work on the interface, the frontend runs fine on its own and simply reports the connection error until a proxy is running.
 
-```bash
-npm install
-npm run dev
-```
-
-The dev server runs on `http://localhost:5173`. A proxy is still required for the chat to work, so keep the proxy from step 1 running in another terminal. If you only want to work on the interface, the frontend runs fine on its own and simply reports the connection error until a proxy is configured.
-
-### 3. Deploy to GitHub Pages
-
-Push the repository to GitHub and let the included workflow publish it. The workflow builds the site, injects the key from a repository secret, and uploads the result to Pages.
+To publish it, push the repository to GitHub and let the included workflow build and deploy it.
 
 See [Deployment](#deployment) for the full procedure.
 
@@ -115,7 +104,21 @@ See [Deployment](#deployment) for the full procedure.
 | Sampling | Supports the `system` role, `temperature`, `top_p`, and `stop`. |
 | Tool calling | Not supported by the server. |
 
-Because the server never reports token usage, the token meter is a client-side estimate: roughly 1.6 characters per token for CJK text and 4 characters per token for Latin text. The interface always labels it as an estimate rather than presenting it as an exact figure.
+Because the server never reports token usage, the interface shows no usage counter at all. There is nothing to estimate and nothing to display.
+
+### Where the endpoint comes from
+
+There is no screen where the user picks a backend. The target is decided at build time and baked into the bundle:
+
+| Constant | Source | Meaning |
+|---|---|---|
+| `BASE_URL` | Hardcoded in `src/config.ts` | The origin address. `https://182.92.245.176:1920`. |
+| `PROXY_URL` | `VITE_PROXY_URL`, or `http://127.0.0.1:8787` in development | The proxy address. When it is set, every request goes through the proxy; when it is empty, the request goes straight to the origin. |
+| `API_KEY` | `VITE_API_KEY` | The bearer token. Empty when the proxy injects the key server-side. |
+| `MODEL` | Hardcoded in `src/config.ts` | `dsv4-flash`. |
+| `TEMPERATURE`, `TOP_P`, `MAX_TOKENS`, `SYSTEM_PROMPT` | Hardcoded in `src/config.ts` | The sampling parameters. `0.7`, `1`, `4096`, and an empty system prompt. |
+
+The rule is one line long: **a configured proxy wins, otherwise the browser calls the origin directly.** The second half only works if the origin serves CORS headers, and it does not.
 
 ### The CORS problem
 
@@ -158,7 +161,7 @@ npx wrangler secret put API_KEY     # type the key when prompted
 npx wrangler deploy
 ```
 
-You end up with a `https://<your-subdomain>.workers.dev` address. Put that into **Settings**, in the proxy URL field. The key now lives in the Worker secret, so the browser never carries it.
+You end up with a `https://<your-subdomain>.workers.dev` address. Put that into the repository variable `VITE_PROXY_URL` and rebuild: from then on the frontend talks to your proxy instead of the origin. The key now lives in the Worker secret, so the browser never carries it.
 
 [![Deploy to Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
@@ -170,7 +173,7 @@ curl https://<your-subdomain>.workers.dev/__ping
 
 #### C. Direct connection to the origin (optional, needs an administrator)
 
-The origin needs no change to work with paths A and B. But if you would rather let browsers call it directly, add the following to the `listen 1920 ssl;` server block:
+The origin needs no change to work with paths A and B. This section is only for administrators who want browsers to reach the origin without running a proxy of their own; nothing in this repository depends on it. If you would rather let browsers call it directly, add the following to the `listen 1920 ssl;` server block:
 
 ```nginx
     # 预检短路：server 级 if 在 rewrite 阶段执行，早于 access(鉴权) 阶段
@@ -212,15 +215,14 @@ A `204` with the four CORS headers is the expected answer.
 
 A key that is compiled into a web page is a key that is published. If the key is baked into the JavaScript bundle, anyone who opens DevTools can read it, and so can anyone who downloads the bundle. There is no way around this: anything the browser can send is something the browser can also reveal.
 
-Three places the key can live:
+Two places the key can live:
 
 | Location | Visible to the browser | Recommendation |
 |---|---|---|
-| Browser `localStorage` (direct mode) | Yes, to anyone with access to the browser | Use only for local development |
-| Worker secret (proxy mode) | No. The key is injected server-side on every upstream request. | Recommended |
+| Worker secret (proxy mode) | No. The key is injected server-side on every upstream request and overrides whatever the client sent. | Recommended |
 | Build-time repository secret `VITE_API_KEY` (Pages) | Yes. The value ends up in the public bundle. | Acceptable only if the key is rotated regularly and scoped narrowly |
 
-In proxy mode the frontend does not send an `Authorization` header at all. It asks `/__ping` whether the proxy holds a key and only falls back to sending its own when the proxy reports that it has none.
+The proxy injects the key on every upstream request, so the frontend does not need a key of its own. If the proxy has no key configured, the client's own `VITE_API_KEY` header is passed through unchanged.
 
 Whichever path you choose, rotate the key periodically. A key that has been sitting in a public bundle should be treated as compromised.
 
@@ -233,7 +235,7 @@ The repository ships with a workflow that builds and publishes automatically.
 
 1. **Push the repository to GitHub.** The target repository is `https://github.com/JiHuiYiYou/hippocrenes-model-chat`.
 2. **Add the repository secret.** Under **Settings**, then **Secrets and variables**, then **Actions**, create a repository secret named `VITE_API_KEY` and put the upstream key in it. The secret is injected at build time and never lands in the repository.
-3. **Optionally add the repository variable.** Create a repository variable named `VITE_PROXY_URL` and set it to the address of your proxy, for example `https://hippocrenes-model-chat-proxy.<your-subdomain>.workers.dev`. Visitors then open the site to a working, pre-configured state instead of an empty settings panel. Leave it unset if the key in `VITE_API_KEY` is enough.
+3. **Add the repository variable.** Create a repository variable named `VITE_PROXY_URL` and set it to the address of your proxy, for example `https://hippocrenes-model-chat-proxy.<your-subdomain>.workers.dev`. This is the one setting that tells the built site where to send its requests. Without it the site calls the origin directly and the browser discards every response, because the origin serves no CORS headers. Leave it unset only if you host the site somewhere the origin is reachable with CORS headers.
 4. **Enable Pages.** The workflow uses `enablement: true`, so the site is created automatically on the first run. You can also set it manually under **Settings**, then **Pages**, with **GitHub Actions** as the source.
 5. **Push to `main`.** The `Deploy to GitHub Pages` workflow builds the site and publishes it. The result is served from a URL of the form `https://<user>.github.io/<repo>/`.
 
@@ -247,6 +249,12 @@ The build output in `dist/` is a static site with no server-side requirement. Se
 API_KEY=sk-your-key node proxy/server.mjs --host 0.0.0.0 --port 8787
 ```
 
+Build the site with the proxy address baked in, so the browser talks to the proxy rather than the origin:
+
+```bash
+VITE_PROXY_URL=https://proxy.example.com npm run build
+```
+
 Put a TLS-terminating reverse proxy in front of it. Keep the whole chain on HTTPS: a page loaded over HTTPS cannot call an `http://` endpoint (mixed content), and the key would otherwise cross the network in clear text.
 
 ### What the deployment does not do
@@ -254,26 +262,16 @@ Put a TLS-terminating reverse proxy in front of it. Keep the whole chain on HTTP
 The deployment publishes static files only. It does not proxy the API, does not store conversations on a server, and does not rate-limit anything. Conversations live in the visitor's own browser, and the only key that ever reaches the browser is the one you choose to compile in.
 
 <a id="settings"></a>
-## Settings Reference
+## Adjustable Options
 
-Open the settings panel from the header. The user interface is currently localized in Chinese; the table below lists the settings by their function.
+There is no settings panel. Two options are adjustable at runtime, and both are reachable directly from the interface:
 
-| Setting | Default | Description |
-|---|---|---|
-| Connection mode | `proxy` | `proxy` routes every request through the proxy address; `direct` calls the origin from the browser and only works if the origin serves CORS headers. |
-| Origin URL | `https://182.92.245.176:1920` | The upstream base address, used in direct mode. HTTPS only. |
-| Proxy URL | Build-time `VITE_PROXY_URL`, otherwise empty | The proxy base address, used in proxy mode. A local Node proxy is `http://127.0.0.1:8787`; a Worker is its `workers.dev` address. |
-| API key | Empty, falls back to build-time `VITE_API_KEY` | The bearer token. In proxy mode it can be left empty, because the proxy injects the key server-side. Stored in `localStorage` when typed at runtime. |
-| Model | `dsv4-flash` | The model identifier sent in the request body. |
-| Reasoning effort | `low` | One of `off`, `none`, `low`, `high`, `max`. Sent as `reasoning_effort`. |
-| Temperature | `0.7` | Sampling temperature, sent as `temperature`. |
-| Top P | `1` | Nucleus sampling cutoff, sent as `top_p`. |
-| Max tokens | `4096` | Upper bound on the generated length, sent as `max_tokens`. |
-| System prompt | Empty | Prepended as a `system` message when not empty. |
-| Theme | `system` | `light`, `dark`, or follow the operating system. |
-| Font size | `md` | `sm`, `md`, or `lg`; scales the whole interface. |
+| Option | Default | Where | Description |
+|---|---|---|---|
+| Theme | `system` | Icon button at the bottom of the sidebar | `light`, `dark`, or follow the operating system. The button flips between light and dark. |
+| Reasoning effort | `low` | Chip at the bottom-left of the composer | One of `off`, `none`, `low`, `high`, `max`. Sent as `reasoning_effort` with every request. |
 
-Two buttons sit at the bottom of the panel. **Test connection** calls the models endpoint and reports latency. **Proxy self-check** probes `/__ping`, which actually reaches the upstream and reports reachability, latency, and whether the proxy holds a key.
+Everything else is hardcoded in `src/config.ts` and is not editable in the interface: the origin URL, the proxy URL, the API key, the model id, `temperature`, `top_p`, `max_tokens`, and the system prompt. Changing any of them means editing that one file and rebuilding.
 
 <a id="design"></a>
 ## Design System
@@ -368,9 +366,10 @@ hippocrenes-model-chat/
 ├── src/
 │   ├── main.tsx          # entry point
 │   ├── App.tsx           # application shell
+│   ├── config.ts         # origin, model, key, sampling parameters
 │   ├── styles.css        # design tokens and component classes
-│   ├── lib/              # api, chat, sse, markdown, hljs, tokens,
-│   │                     # storage, share, export, date, clipboard
+│   ├── lib/              # api, chat, sse, markdown, hljs,
+│   │                     # storage, theme, date, clipboard
 │   ├── state/            # store, three slices, types, persistence
 │   └── ui/               # presentational components
 ├── proxy/
@@ -390,11 +389,11 @@ hippocrenes-model-chat/
 
 State is split into three slices over a shared type module, so no slice has to import another one:
 
-- `settingsSlice` holds the settings and the connection state, including the connection test.
+- `settingsSlice` holds the two runtime options, the theme and the reasoning effort.
 - `chatSlice` holds conversations and the streaming lifecycle. Incoming SSE frames are buffered and flushed to the store twelve times per second, which keeps a long answer from re-rendering the tree on every token.
-- `uiSlice` holds sidebar and panel visibility, scroll position, unread counters, and toasts.
+- `uiSlice` holds sidebar visibility, scroll position, unread counters, and toasts.
 
-Conversations and settings are persisted to `localStorage` under the key `hippocrenes.chat.v1`, debounced by 400 milliseconds, and capped at 50 conversations.
+Conversations and settings are persisted to `localStorage` under the key `hippocrenes.chat.v2`, debounced by 400 milliseconds, and capped at 50 conversations.
 
 <a id="contribute"></a>
 ## Contributing

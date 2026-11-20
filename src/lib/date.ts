@@ -31,9 +31,3 @@ export function formatTime(ts: number, now = Date.now()): string {
   return `${mo}-${dd}`
 }
 
-/** 导出文件名用：20261120-1534 */
-export function stamp(ts = Date.now()): string {
-  const d = new Date(ts)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
-}

@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { GearSix, Plus, Trash } from '@phosphor-icons/react'
+import { Moon, Plus, Sun, Trash } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { formatTime, groupOf, type DateGroup } from '@/lib/date'
+import { resolveTheme } from '@/lib/theme'
 
 interface Props {
   open: boolean
@@ -17,7 +18,8 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
   const selectConversation = useApp((s) => s.selectConversation)
   const deleteConversation = useApp((s) => s.deleteConversation)
   const newConversation = useApp((s) => s.newConversation)
-  const setSettingsOpen = useApp((s) => s.setSettingsOpen)
+  const settings = useApp((s) => s.settings)
+  const updateSettings = useApp((s) => s.updateSettings)
 
   // 列表按更新时间倒序；store 里是「新建在前」的插入序，不等于「最近在前」
   const grouped = useMemo(() => {
@@ -38,6 +40,11 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
     onClose()
   }
 
+  const dark = resolveTheme(settings.theme) === 'dark'
+  const toggleTheme = (): void => {
+    updateSettings({ theme: dark ? 'light' : 'dark' })
+  }
+
   return (
     <>
       {open && <div className="overlay lg:hidden" onClick={onClose} aria-hidden="true" />}
@@ -52,6 +59,9 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
         ].join(' ')}
       >
         <div className="border-b border-line px-3 py-3">
+          <div className="mb-3 px-1 font-serif text-[15px] tracking-[-0.01em] text-ink">
+            Hippocrene
+          </div>
           <button type="button" className="btn btn-primary w-full" onClick={onNew}>
             <Plus size={15} weight="bold" />
             新对话
@@ -59,11 +69,6 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-3" aria-label="会话列表">
-          {grouped.length === 0 && (
-            <p className="px-2 py-1 text-[12px] leading-[1.6] text-faint">
-              还没有会话。发一条消息就会自动建一个。
-            </p>
-          )}
 
           {grouped.map((group) => (
             <div key={group.name} className="mb-4 last:mb-0">
@@ -105,14 +110,15 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
           ))}
         </nav>
 
-        <div className="border-t border-line px-3 py-3">
+        <div className="flex items-center justify-end border-t border-line px-3 py-2">
           <button
             type="button"
-            className="btn btn-ghost w-full justify-start"
-            onClick={() => setSettingsOpen(true)}
+            className="btn btn-ghost btn-icon"
+            onClick={toggleTheme}
+            aria-label={dark ? '切换到浅色主题' : '切换到深色主题'}
+            title={dark ? '切换到浅色主题' : '切换到深色主题'}
           >
-            <GearSix size={15} weight="bold" />
-            设置
+            {dark ? <Moon size={16} weight="bold" /> : <Sun size={16} weight="bold" />}
           </button>
         </div>
       </aside>

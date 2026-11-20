@@ -1,5 +1,13 @@
-import type { ApiConfig, ReasoningEffort, Role } from '@/state/types'
-import { ApiError, buildHeaders, chatEndpoint, describeHttpError, extractCode } from './api'
+import type { ReasoningEffort, Role } from '@/state/types'
+import { MAX_TOKENS, MODEL, SYSTEM_PROMPT, TEMPERATURE, TOP_P } from '@/config'
+import {
+  ApiError,
+  buildHeaders,
+  chatEndpoint,
+  describeConnectionError,
+  describeHttpError,
+  extractCode,
+} from './api'
 import { readSSE } from './sse'
 
 export interface ChatChunk {
@@ -13,17 +21,9 @@ export interface ChatChunk {
 }
 
 export interface ChatParams {
-  config: ApiConfig
   messages: { role: Role; content: string }[]
-  model: string
   effort: ReasoningEffort
-  temperature: number
-  topP: number
-  maxTokens: number
-  systemPrompt: string
   signal: AbortSignal
-  /** 代理是否自己持有 key —— 决定要不要在请求里带 Authorization */
-  proxyHasKey?: boolean
   onReasoning: (chunk: string) => void
   onContent: (chunk: string) => void
   onFinish?: (reason: string | null) => void
@@ -37,32 +37,29 @@ export interface ChatParams {
  */
 export async function runChat(p: ChatParams): Promise<'stop' | 'aborted'> {
   const body = {
-    model: p.model,
-    messages: p.systemPrompt.trim()
-      ? [{ role: 'system' as const, content: p.systemPrompt }, ...p.messages]
+    model: MODEL,
+    messages: SYSTEM_PROMPT.trim()
+      ? [{ role: 'system' as const, content: SYSTEM_PROMPT }, ...p.messages]
       : p.messages,
     // ★ 这个后端强制要求 stream:true，stream:false 直接 400
     stream: true,
     reasoning_effort: p.effort,
-    temperature: p.temperature,
-    top_p: p.topP,
-    max_tokens: p.maxTokens,
+    temperature: TEMPERATURE,
+    top_p: TOP_P,
+    max_tokens: MAX_TOKENS,
   }
 
   let res: Response
   try {
-    res = await fetch(chatEndpoint(p.config), {
+    res = await fetch(chatEndpoint(), {
       method: 'POST',
-      headers: buildHeaders(p.config, p.proxyHasKey),
+      headers: buildHeaders(),
       body: JSON.stringify(body),
       signal: p.signal,
     })
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') throw new ApiError('已停止', 'abort')
-    throw new ApiError(
-      `连不上 ${p.config.baseUrl}：${(err as Error)?.message ?? '网络错误'}`,
-      'network',
-    )
+    throw new ApiError(describeConnectionError(err), 'network')
   }
 
   if (!res.ok) {

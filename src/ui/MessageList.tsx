@@ -1,9 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { Conversation } from '@/state/types'
 import { useApp } from '@/state/store'
-import { copyText } from '@/lib/clipboard'
-import { buildShareUrl } from '@/lib/share'
-import { exportConversation } from '@/lib/export'
 import { MessageItem } from './MessageItem'
 import { ScrollToBottom } from './ScrollToBottom'
 
@@ -20,7 +17,6 @@ export function MessageList({ conversation }: Props): React.ReactElement {
   const unread = useApp((s) => s.unread)
   const streamingId = useApp((s) => s.streamingId)
   const regenerate = useApp((s) => s.regenerate)
-  const pushToast = useApp((s) => s.pushToast)
 
   const messages = conversation?.messages ?? []
   const last = messages[messages.length - 1]
@@ -58,22 +54,6 @@ export function MessageList({ conversation }: Props): React.ReactElement {
     setUnread(0)
   }
 
-  const onShare = async (): Promise<void> => {
-    if (!conversation) return
-    const url = buildShareUrl(conversation)
-    const ok = await copyText(url)
-    pushToast({
-      text: ok ? '分享链接已复制到剪贴板' : '复制失败，请手动从地址栏复制',
-      tone: ok ? 'ok' : 'warn',
-    })
-  }
-
-  const onExport = (): void => {
-    if (!conversation) return
-    exportConversation(conversation)
-    pushToast({ text: '已导出为 Markdown 文件', tone: 'ok' })
-  }
-
   return (
     <div className="relative min-h-0 flex-1">
       <div
@@ -88,8 +68,6 @@ export function MessageList({ conversation }: Props): React.ReactElement {
               message={m}
               streaming={m.id === streamingId}
               onRegenerate={() => void regenerate(m.id)}
-              onShare={() => void onShare()}
-              onExport={onExport}
             />
           ))}
         </div>

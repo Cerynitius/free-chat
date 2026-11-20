@@ -200,33 +200,6 @@
     padding: 7px;
   }
 
-  /* 输入框 */
-  .field {
-    width: 100%;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-line);
-    background: var(--color-surface);
-    color: var(--color-ink);
-    font-size: 13px;
-    padding: 8px 10px;
-    transition: border-color 0.2s var(--ease-out-expo);
-  }
-
-  .field:hover {
-    border-color: var(--color-faint);
-  }
-
-  .field:focus {
-    outline: none;
-    border-color: var(--color-ink);
-  }
-
-  .field-label {
-    display: block;
-    font-size: 12px;
-    color: var(--color-muted);
-    margin-bottom: 6px;
-  }
 
   /* 小标签：pill 形状只在这里用 */
   .tag {
@@ -552,10 +525,6 @@
   }
 }
 
-/* ── 滚动淡影（纯装饰，不吃 pointer） ───────────────────────── */
-.scroll-fade {
-  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-}
 
 /* ── 悬浮圆钮（回到底部等） ─────────────────────────────────── */
 .fab {
@@ -598,31 +567,6 @@
   background: var(--color-surface);
 }
 
-/* ── 右侧滑出面板（设置） ───────────────────────────────────── */
-.drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 60;
-  width: min(420px, 100vw);
-  border-left: 1px solid var(--color-line);
-  background: var(--color-canvas);
-  display: flex;
-  flex-direction: column;
-  animation: drawer-in 0.24s var(--ease-out-expo);
-}
-
-@keyframes drawer-in {
-  from {
-    transform: translateX(16px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
 
 .overlay {
   position: fixed;
