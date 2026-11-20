@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowClockwise, Check, Copy, WarningCircle } from '@phosphor-icons/react'
-import type { Message } from '@/state/types'
+import type { Message, TruncationKind } from '@/state/types'
 import { copyText } from '@/lib/clipboard'
 import { Markdown } from './Markdown'
 import { ReasoningPanel } from './ReasoningPanel'
@@ -9,6 +9,22 @@ interface Props {
   message: Message
   streaming: boolean
   onRegenerate: () => void
+}
+
+/** 截断的三种来由，各自怎么解释 —— 别让半个回答装作完整回答。 */
+const TRUNCATION_NOTE: Record<TruncationKind, { title: string; detail: string }> = {
+  length: {
+    title: '输出被截断',
+    detail: '达到了长度上限（max_tokens）。思考和正文共用这一个预算 —— 想太久，正文就被挤没了。',
+  },
+  stream: {
+    title: '连接中断',
+    detail: '流提前断了，没收到结束标记 —— 下面这段可能不完整。',
+  },
+  'content-filter': {
+    title: '内容被过滤',
+    detail: '上游的过滤器把这一段截掉了。',
+  },
 }
 
 export function MessageItem({
@@ -36,6 +52,7 @@ export function MessageItem({
   }
 
   const empty = !message.content.trim() && !message.reasoning.trim()
+  const note = message.truncated ? TRUNCATION_NOTE[message.truncated.kind] : null
 
   return (
     <div className="group">
@@ -65,6 +82,16 @@ export function MessageItem({
       ) : (
         <div className={streaming ? 'caret' : undefined}>
           <Markdown content={message.content} />
+        </div>
+      )}
+
+      {note && (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-yellow-soft bg-yellow-soft/50 px-3 py-2.5 text-[13px] text-yellow-ink">
+          <WarningCircle size={16} weight="bold" className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">{note.title}</div>
+            <div className="mt-1 opacity-90">{note.detail}</div>
+          </div>
         </div>
       )}
 

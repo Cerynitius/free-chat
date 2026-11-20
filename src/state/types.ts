@@ -7,6 +7,26 @@ export type Role = 'user' | 'assistant' | 'system'
 
 export type MessageStatus = 'complete' | 'streaming' | 'error' | 'aborted'
 
+/**
+ * 内容被截断的来由。
+ *
+ * 这一栏存在的理由：被截断的回答**看起来**和正常完成的一模一样 ——
+ * 有内容、没报错、状态还是「完成」。不说出来的话，排查的人根本无从下手。
+ */
+export type TruncationKind =
+  /** 撞到 max_tokens 上限。思考和正文共用这一个预算，想太久正文就没了 */
+  | 'length'
+  /** 流提前断了（连接被掐）—— 内容不完整 */
+  | 'stream'
+  /** 上游的过滤器把内容截了 */
+  | 'content-filter'
+
+export interface Truncation {
+  kind: TruncationKind
+  /** 上游给的结束原因原文 */
+  finishReason?: string | null
+}
+
 /** 服务端接受的思考档位。/v1/models 只声明了 max/high/low，但 off 与 none 实测也被接受。 */
 export type ReasoningEffort = 'off' | 'none' | 'low' | 'high' | 'max'
 
@@ -22,6 +42,8 @@ export interface Message {
   createdAt: number
   status: MessageStatus
   error?: { message: string; code?: string }
+  /** 内容被截断时的说明 —— 没有这一栏，被截断的回答会被误当成正常完成 */
+  truncated?: Truncation
   /** 思考耗时（ms），面板上显示「已思考 3.2s」 */
   reasoningMs?: number
 }

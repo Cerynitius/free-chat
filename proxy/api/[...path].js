@@ -13,7 +13,10 @@
  */
 import { handleRequest } from '../handler.js'
 
-export const config = { runtime: 'nodejs', maxDuration: 60 }
+// maxDuration 是这次响应能活多久的上限 —— 上游思考久了整条流要跑好几分钟，
+// 60 秒会把它拦腰砍断（而且砍断之后前端看不出来，只当生成正常结束）。
+// Hobby 套餐本身就把函数时长钉在 60 秒，Pro 才吃这个值。
+export const config = { runtime: 'nodejs', maxDuration: 300 }
 
 export default async function handler(req, res) {
   try {

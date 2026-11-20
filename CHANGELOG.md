@@ -40,6 +40,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The model name label and the hint line under the composer.
 - The "connection not tested yet" notice.
 
+### Fixed
+
+- Long answers and long thoughts are no longer cut off in the middle. The upstream counts `reasoning_content` against the same `max_tokens` budget as the answer, so thinking hard ate the whole budget and left the answer nothing: measured against this upstream, a deep reasoning task at `max_tokens: 4096` spent all 4096 tokens on thinking and produced not a single token of answer. `MAX_TOKENS` is now `32768`; the upstream accepts values up to `131072`.
+- A cut-off response is no longer presented as a finished one. The client now tracks the upstream's `finish_reason` and whether the stream ended with a termination marker, and a truncated message carries a notice that tells a token-budget cut, a dropped connection, and an upstream filter apart. Previously every one of them looked like a normal completed answer.
+- The upstream's `finish_reason` is read before the delta, so a last frame that carries no `delta` no longer swallows the termination reason.
+- The Vercel entry point asks for 300 seconds instead of 60. Vercel kills a function at `maxDuration`, and a long think easily runs past a minute.
+
 ## [0.1.0] - 2026-11-20
 
 ### Added

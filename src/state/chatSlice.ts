@@ -1,6 +1,6 @@
 import type { AppGet, AppSet, ChatSlice, Conversation, Message, Role } from './types'
 import { ApiError } from '@/lib/api'
-import { runChat } from '@/lib/chat'
+import { describeTruncation, runChat } from '@/lib/chat'
 
 function uid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -105,7 +105,6 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     const effort = get().settings.effort
     const startedAt = performance.now()
     let reasoningStartedAt: number | null = null
-    let finishReason: string | null = null
 
     const push = (chunk: string, field: 'content' | 'reasoning'): void => {
       const buf = buffers.get(asstId) ?? { content: '', reasoning: '' }
@@ -115,7 +114,7 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     }
 
     try {
-      await runChat({
+      const outcome = await runChat({
         messages,
         effort,
         signal: ctrl.signal,
@@ -124,9 +123,6 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
           push(chunk, 'reasoning')
         },
         onContent: (chunk) => push(chunk, 'content'),
-        onFinish: (reason) => {
-          finishReason = reason
-        },
       })
 
       // 收尾：把残余缓冲刷进 store，再定状态
@@ -136,10 +132,15 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       }
       flush(convId, asstId)
 
+      // 被截断也是一种「完成」—— 但必须留个记号，
+      // 否则半个回答看起来和完整回答一模一样，没人知道发生过什么。
+      const truncated = describeTruncation(outcome)
+
       patchMessage(convId, asstId, {
         status: 'complete',
         reasoningMs:
           reasoningStartedAt !== null ? Math.round(reasoningStartedAt - startedAt) : undefined,
+        truncated,
       })
 
       // 标题：取第一条 user 消息的前 24 个字
@@ -154,8 +155,6 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
           }))
         }
       }
-
-      void finishReason
     } catch (err) {
       if (timer !== null) {
         window.clearTimeout(timer)
@@ -163,7 +162,11 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       }
       flush(convId, asstId)
 
-      const aborted = err instanceof ApiError && err.kind === 'abort'
+      // 「停止生成」有两种表现：请求还没发出去时是 ApiError('已停止')，
+      // 流式途中被掐时是 DOMException(AbortError) —— 两种都得认，
+      // 否则手动停止会被显示成「请求失败」。
+      const aborted =
+        (err instanceof ApiError && err.kind === 'abort') || (err as Error)?.name === 'AbortError'
       const message = err instanceof Error ? err.message : String(err)
       patchMessage(convId, asstId, {
         status: aborted ? 'aborted' : 'error',

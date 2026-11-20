@@ -33,6 +33,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 |---|---|
 | Streaming | Server-Sent Events with a blinking typing caret; output is buffered to about twelve flushes per second so long answers stay smooth |
 | Reasoning | `reasoning_content` is rendered in its own collapsible panel, separate from the answer body, with a readout of how many seconds the model spent thinking |
+| Truncation | A cut-off answer says so: the message carries a notice telling a token-budget cut, a dropped connection, and an upstream filter apart |
 | Reasoning effort | Five levels: off, none, low, high, max. Picked from the chip at the bottom-left of the composer and sent as `reasoning_effort`; the default is `low` |
 | Context | Full multi-turn history is sent back with every request |
 | Markdown | GitHub Flavored Markdown including tables, rendered through `markdown-it` and sanitized with DOMPurify |
@@ -147,12 +148,26 @@ See [Deployment](#deployment) for the full procedure.
 | Authentication | `Authorization: Bearer <key>` on every request. |
 | Streaming | Mandatory. `stream: false` is rejected with `400 stream_required`. |
 | Reasoning channel | `delta.content` and `delta.reasoning_content` are two independent fields inside the same SSE frame. |
-| Termination | `finish_reason: "stop"`. There is no `usage` field in any frame. |
+| Termination | `finish_reason: "stop"`, or `"length"` when the token budget runs out. There is no `usage` field in any frame. |
 | Reasoning effort | Accepts `off`, `none`, `low`, `high`, and `max`. |
 | Sampling | Supports the `system` role, `temperature`, `top_p`, and `stop`. |
 | Tool calling | Not supported by the server. |
 
 Because the server never reports token usage, the interface shows no usage counter at all. There is nothing to estimate and nothing to display.
+
+### The token budget
+
+`max_tokens` is a **shared** budget: the upstream counts `reasoning_content` against it as well. A long think therefore eats the room the answer needs, and when the budget runs out the stream ends with `finish_reason: "length"` — usually in the middle of the reasoning, before the answer has even started. Measured against this upstream, a hard reasoning task at `max_tokens: 4096` spent all 4096 tokens on thinking and produced not a single token of answer.
+
+`MAX_TOKENS` is `32768` for that reason. The upstream accepts values up to `131072`.
+
+The client does not hide a cut-off response. The message carries a notice that tells the three cases apart:
+
+| Notice | What happened |
+|---|---|
+| Output was truncated | The upstream hit `max_tokens`. Thinking and the answer share that one budget. |
+| Connection dropped | The stream ended without a termination marker, so the text below may be incomplete. |
+| Content was filtered | The upstream's own filter cut the response. |
 
 ### Where the endpoint comes from
 
@@ -164,7 +179,7 @@ There is no screen where the user picks a backend. The target is decided at buil
 | `PROXY_URL` | `VITE_PROXY_URL`, or `http://127.0.0.1:8787` in development | The proxy's public address — the Worker's address in the default setup. When it is set, every request goes through the proxy; when it is empty, the request goes straight to the origin. |
 | `API_KEY` | `VITE_API_KEY` | The bearer token. Empty when the proxy injects the key server-side. |
 | `MODEL` | Hardcoded in `src/config.ts` | `dsv4-flash`. |
-| `TEMPERATURE`, `TOP_P`, `MAX_TOKENS`, `SYSTEM_PROMPT` | Hardcoded in `src/config.ts` | The sampling parameters. `0.7`, `1`, `4096`, and an empty system prompt. |
+| `TEMPERATURE`, `TOP_P`, `MAX_TOKENS`, `SYSTEM_PROMPT` | Hardcoded in `src/config.ts` | The sampling parameters. `0.7`, `1`, `32768`, and an empty system prompt. |
 
 The rule is one line long: **a configured proxy wins, otherwise the browser calls the origin directly.** The second half only works if the origin serves CORS headers, and it does not.
 
@@ -274,6 +289,8 @@ npx vercel --prod
 ```
 
 Set `API_KEY` as a project environment variable in the Vercel dashboard. `UPSTREAM` and `ALLOWED_ORIGINS` have working defaults.
+
+Vercel kills a function after `maxDuration` seconds, and a long think easily runs past a minute. The entry point asks for 300 seconds, which needs a paid plan — the Hobby plan pins every function at 60 seconds no matter what the function asks for, so a response that thinks for longer than that gets cut off by the platform.
 
 On Deno Deploy, `proxy/deno.ts` is the entry point:
 

@@ -32,5 +32,14 @@ export const DEFAULT_EFFORT: ReasoningEffort = 'low'
 
 export const TEMPERATURE = 0.7
 export const TOP_P = 1
-export const MAX_TOKENS = 4096
+
+/**
+ * 思考和正文**共用**这一个预算 —— 上游把 reasoning_content 也算进 max_tokens。
+ *
+ * 4096 在开思考的时候根本不够：实测一次高强度思考就把 4096 吃光，
+ * 正文一个 token 都没轮到，流以 finish_reason=length 结束 —— 看着像
+ * 「思考到一半断了」。上游实测接受到 131072，这里给 32768。
+ */
+export const MAX_TOKENS = 32768
+
 export const SYSTEM_PROMPT = ''

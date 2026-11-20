@@ -33,6 +33,7 @@
 |---|---|
 | 流式输出 | SSE 流式返回，带打字光标；分片攒到每秒十二次左右刷新，长答案也不卡 |
 | 思考过程 | `reasoning_content` 单独渲染成可折叠面板，与正文分开，并报出模型想了多少秒 |
+| 截断提示 | 回答被截断时会明说：消息上带一条提示，把「撞了长度上限」「连接断了」「上游过滤」三种情况分开 |
 | 思考档位 | 关闭 / 无 / 低 / 高 / 极限五档，就选在输入框左下角那个 chip 里，作为 `reasoning_effort` 发送；默认是 `low` |
 | 上下文 | 每次请求把完整的多轮历史一起发回去 |
 | Markdown | 支持 GitHub 风格 Markdown（含表格），用 `markdown-it` 渲染，DOMPurify 消毒 |
@@ -147,12 +148,28 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | 鉴权 | 每个请求都要带 `Authorization: Bearer <key>`。 |
 | 流式 | 强制要求。`stream: false` 会直接被 `400 stream_required` 挡掉。 |
 | 思考通道 | `delta.content`（正文）和 `delta.reasoning_content`（思考）是同一帧里两个彼此独立的字段。 |
-| 结束标记 | `finish_reason: "stop"`。任何一帧里都没有 `usage` 字段。 |
+| 结束标记 | `finish_reason: "stop"`；token 预算用尽时是 `"length"`。任何一帧里都没有 `usage` 字段。 |
 | 思考档位 | 接受 `off`、`none`、`low`、`high`、`max`。 |
 | 采样参数 | 支持 `system` 角色、`temperature`、`top_p`、`stop`。 |
 | 工具调用 | 服务端不支持。 |
 
 服务端永远不报 token 用量，所以界面上干脆不显示任何用量计数 —— 没有可估的数，也就没有要显示的数。
+
+### token 预算
+
+`max_tokens` 是**共用**的预算 —— 上游把 `reasoning_content` 也算在里面。思考一长，正文能用的额度就被挤掉了；额度用尽时流以 `finish_reason: "length"` 结束，而且多半是**停在思考中间**，正文一个字都还没轮到。
+
+实测这个上游：一个需要深度推理的任务在 `max_tokens: 4096` 下把 4096 全花在思考上，正文一个 token 都没产出。
+
+所以 `MAX_TOKENS` 定成 `32768`。上游实测接受到 `131072`。
+
+被截断时前端不装没事 —— 消息上会带一条提示，把三种情况分开：
+
+| 提示 | 到底发生了什么 |
+|---|---|
+| 输出被截断 | 上游撞到了 `max_tokens`。思考和正文共用这一个预算。 |
+| 连接中断 | 流没收到结束标记就断了 —— 下面这段可能不完整。 |
+| 内容被过滤 | 上游自己的过滤器把这一段截了。 |
 
 ### 请求地址是从哪来的
 
@@ -164,7 +181,7 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | `PROXY_URL` | `VITE_PROXY_URL`，开发模式下兜底成 `http://127.0.0.1:8787` | 代理的公网地址，默认那套里指的是 Worker 的地址。填了就所有请求都走代理，留空就直接打源站。 |
 | `API_KEY` | `VITE_API_KEY` | Bearer 令牌。代理在服务端注入 key 时它可以是空的。 |
 | `MODEL` | 写死在 `src/config.ts` | `dsv4-flash`。 |
-| `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`4096` 和一个空的系统提示词。 |
+| `TEMPERATURE`、`TOP_P`、`MAX_TOKENS`、`SYSTEM_PROMPT` | 写死在 `src/config.ts` | 采样参数，分别是 `0.7`、`1`、`32768` 和一个空的系统提示词。 |
 
 规则就一句话：**配了代理就走代理，没配浏览器就直接调源站。** 后一半只有在源站给了 CORS 头时才成立，而它没给。
 
@@ -274,6 +291,8 @@ npx vercel --prod
 ```
 
 在 Vercel 控制台把 `API_KEY` 设成项目环境变量。`UPSTREAM` 和 `ALLOWED_ORIGINS` 有可用的默认值。
+
+Vercel 到 `maxDuration` 秒就会把函数杀掉，而一次长思考很容易超过一分钟。入口这里申请的是 300 秒，这需要付费套餐 —— Hobby 套餐把函数时长钉死在 60 秒，函数申请多少都没用，于是思考超过一分钟的回答会被平台从中间砍断。
 
 Deno Deploy 上入口是 `proxy/deno.ts`：
 
