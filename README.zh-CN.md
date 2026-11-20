@@ -230,7 +230,7 @@ POST /v1/chat/completions  ->  同样零 CORS 头
 
 都有免费额度，但都要注册账号。
 
-Vercel 上要用 **Node** 运行时，不要用 Edge。Edge 函数跑在边缘节点，Node 函数跑在真容器里，只有真容器才能稳定直连裸 IP 的非标准端口。项目根目录就是 `proxy/` 目录，入口是 `proxy/api/index.js`，`proxy/vercel.json` 把所有路径都转到它。
+Vercel 上要用 **Node** 运行时，不要用 Edge。Edge 函数跑在边缘节点，Node 函数跑在真容器里，只有真容器才能稳定直连裸 IP 的非标准端口。项目根目录就是 `proxy/` 目录，入口是 `proxy/api/[...path].js`，`proxy/vercel.json` 把所有路径改写到 `/api/:path*`。
 
 ```bash
 cd proxy
@@ -475,7 +475,7 @@ hippocrenes-model-chat/
 │   ├── server.mjs        # Node runner
 │   ├── tunnel.mjs        # 本机代理加 Cloudflare 快速隧道
 │   ├── deno.ts           # Deno Deploy 入口
-│   ├── api/index.js      # Vercel 入口，Node 运行时
+│   ├── api/[...path].js # Vercel 入口，Node 运行时
 │   ├── vercel/edge.ts    # Vercel Edge 入口
 │   ├── vercel.json       # Vercel 路由
 │   └── wrangler.toml     # Cloudflare Workers 配置

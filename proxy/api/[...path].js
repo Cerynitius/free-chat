@@ -1,11 +1,15 @@
 /**
- * Vercel (Node.js runtime) 入口。
+ * Vercel（Node.js 运行时）入口 —— catch-all。
  *
  * 用 Node 运行时而不是 Edge：Edge 是边缘节点，Node 是真容器 ——
- * 只有真容器才能稳定地直连裸 IP 的非标准端口（上游只有 182.92.245.176:1920 这个入口，
- * 没有域名，证书也只有 IP SAN）。
+ * 只有真容器才能稳定地直连裸 IP 的非标准端口（上游只有 182.92.245.176:1920
+ * 这个入口，没有域名，证书也只有 IP SAN）。
  *
- * 关键：响应必须**流式**回传。上游是 SSE，攒成整段再吐出去就没有流式了。
+ * 路径怎么还原：vercel.json 里把 `/(.*)` 改写到 `/api/:path*`，
+ * 于是 /v1/models → /api/v1/models，函数里 req.url 就是 /api/v1/models，
+ * 去掉 /api 前缀就还原成上游的真实路径。
+ * （Vercel 的路由顺序是「先查文件系统、再套 rewrites」，所以直接命中
+ *   /api/... 的请求不会二次改写，req.url 形状一致。）
  */
 import { handleRequest } from '../handler.js'
 
@@ -15,12 +19,16 @@ export default async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`)
 
+    // 去掉 rewrite 挂上的 /api 前缀，还原成上游路径
+    let path = url.pathname
+    if (path === '/api' || path.startsWith('/api/')) path = path.slice(4) || '/'
+
     // 请求体很小（一个 JSON），直接读成 Buffer —— 上游不介意我们缓冲请求体
     const chunks = []
     for await (const chunk of req) chunks.push(chunk)
     const body = chunks.length ? Buffer.concat(chunks) : undefined
 
-    const request = new Request(url, {
+    const request = new Request(`http://${req.headers.host ?? 'localhost'}${path}${url.search}`, {
       method: req.method,
       headers: req.headers,
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
@@ -36,6 +44,7 @@ export default async function handler(req, res) {
       return
     }
 
+    // ★ 逐块回传 —— 上游是 SSE，攒成整段再吐就没有流式了
     const reader = response.body.getReader()
     for (;;) {
       const { done, value } = await reader.read()

@@ -230,7 +230,7 @@ Measured on the running tunnel:
 
 Free quotas, but both need an account.
 
-On Vercel, use the **Node** runtime, not Edge. An Edge function runs on an edge node; a Node function runs in a real container, and only a real container can be relied on to reach a bare IP on a non-standard port. The project root is the `proxy/` directory, the entry point is `proxy/api/index.js`, and `proxy/vercel.json` rewrites every path to it.
+On Vercel, use the **Node** runtime, not Edge. An Edge function runs on an edge node; a Node function runs in a real container, and only a real container can be relied on to reach a bare IP on a non-standard port. The project root is the `proxy/` directory, the entry point is `proxy/api/[...path].js`, and `proxy/vercel.json` rewrites every path to `/api/:path*`.
 
 ```bash
 cd proxy
@@ -475,7 +475,7 @@ hippocrenes-model-chat/
 │   ├── server.mjs        # Node runner
 │   ├── tunnel.mjs        # local proxy plus a Cloudflare quick tunnel
 │   ├── deno.ts           # Deno Deploy entry point
-│   ├── api/index.js      # Vercel entry point on the Node runtime
+│   ├── api/[...path].js # Vercel entry point on the Node runtime
 │   ├── vercel/edge.ts    # Vercel Edge entry point
 │   ├── vercel.json       # Vercel routing
 │   └── wrangler.toml     # Cloudflare Workers configuration

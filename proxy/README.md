@@ -178,7 +178,7 @@ Measured on a running tunnel:
 
 ### 3. Vercel (Node runtime)
 
-The project root is the `proxy/` directory. The entry point is `api/index.js`,
+The project root is the `proxy/` directory. The entry point is `api/[...path].js`,
 and `vercel.json` rewrites every path onto it.
 
 Use the Node runtime, not Edge. An Edge function runs on an edge node; a Node
@@ -355,7 +355,7 @@ nginx) and make sure compression is off for the `text/event-stream` path.
 after deploying.** Check that the entry point exports the right shape:
 `export default { fetch: handleRequest }` for Workers and Deno Deploy, a bare
 `export default handleRequest` for Vercel Edge, and a Node-style
-`(req, res)` function for `api/index.js`.
+`(req, res)` function for `api/[...path].js`.
 
 ---
 
@@ -367,7 +367,7 @@ after deploying.** Check that the entry point exports the right shape:
 | `server.mjs` | Node runner. `node:http` plus Node 18+ globals. Streams SSE chunk by chunk. |
 | `tunnel.mjs` | Starts `server.mjs` plus a `cloudflared` tunnel, writes the tunnel address into `VITE_PROXY_URL` with the `gh` CLI, and triggers the Pages deployment. |
 | `deno.ts` | Deno Deploy entry point. |
-| `api/index.js` | Vercel entry point on the Node runtime. Writes the response back chunk by chunk. |
+| `api/[...path].js` | Vercel entry point on the Node runtime. Strips the `/api` prefix the rewrite added, then writes the response back chunk by chunk. |
 | `vercel.json` | Vercel routing: every path is rewritten onto `/api`. |
 | `vercel/edge.ts` | Vercel Edge entry point. |
 | `wrangler.toml` | Cloudflare Workers configuration. `API_KEY` is a secret, not a var. |

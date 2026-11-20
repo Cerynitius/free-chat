@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - A tunnel launcher, `proxy/tunnel.mjs`, wired to `npm run tunnel`: it starts the local proxy, opens a Cloudflare quick tunnel to it, and writes the resulting `trycloudflare.com` address into the repository variable `VITE_PROXY_URL` with the `gh` CLI before triggering the Pages deployment. The tunnel address changes on every restart, and the site follows it automatically.
-- A Vercel entry point on the Node runtime, `proxy/api/index.js`, with `proxy/vercel.json` rewriting every path onto it. The project root is `proxy/`. Node rather than Edge, because an Edge function runs on an edge node and only a real container can be relied on to reach a bare IP on a non-standard port.
+- A Vercel entry point on the Node runtime, `proxy/api/[...path].js`, with `proxy/vercel.json` rewriting every path onto `/api/:path*`. The project root is `proxy/`. Node rather than Edge, because an Edge function runs on an edge node and only a real container can be relied on to reach a bare IP on a non-standard port.
 
 ### Changed
 
