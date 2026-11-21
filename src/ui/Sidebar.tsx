@@ -1,10 +1,13 @@
-import { useMemo, useRef, useState } from 'react'
-import { DotsThree, Moon, Plus, PushPin, Sun } from '@phosphor-icons/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DotsThree, GearSix, MagnifyingGlass, Moon, Plus, PushPin, Sun, X } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { formatTime, groupOf, type DateGroup } from '@/lib/date'
+import { conversationToMarkdown, download, safeFileName } from '@/lib/export'
+import { searchConversations, splitMarks } from '@/lib/search'
 import { resolveTheme } from '@/lib/theme'
 import { MAX_TITLE_LEN } from '@/lib/title'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { modKey } from './shortcuts'
 
 interface Props {
   open: boolean
@@ -31,6 +34,23 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
   const newConversation = useApp((s) => s.newConversation)
   const settings = useApp((s) => s.settings)
   const updateSettings = useApp((s) => s.updateSettings)
+  const historyLoaded = useApp((s) => s.historyLoaded)
+  const setSettingsOpen = useApp((s) => s.setSettingsOpen)
+  const searchFocusTick = useApp((s) => s.searchFocusTick)
+  const pushToast = useApp((s) => s.pushToast)
+
+  /** 搜索词 —— 有词的时候列表换成搜索结果 */
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement | null>(null)
+
+  // Ctrl+K：把焦点交给搜索框（侧边栏收着的话 store 那边已经把它展开了）
+  useEffect(() => {
+    if (!searchFocusTick) return
+    requestAnimationFrame(() => {
+      searchRef.current?.focus()
+      searchRef.current?.select()
+    })
+  }, [searchFocusTick])
 
   /** 正在改名的会话 —— 名字就地编辑，不弹窗 */
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -53,6 +73,11 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
       })).filter((g) => g.items.length > 0),
     }
   }, [conversations])
+
+  const hits = useMemo(
+    () => (query.trim() ? searchConversations(conversations.filter((c) => c.messages.length > 0), query) : null),
+    [conversations, query],
+  )
 
   const onNew = (): void => {
     newConversation()
@@ -85,6 +110,17 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
     return [
       { label: '重命名', onSelect: () => startRename(id, conv.title) },
       { label: conv.pinned ? '取消置顶' : '置顶', onSelect: () => togglePin(id) },
+      {
+        label: '导出为 Markdown',
+        onSelect: () => {
+          download(
+            `${safeFileName(conv.title)}.md`,
+            conversationToMarkdown(conv, settings.exportReasoning),
+            'text/markdown',
+          )
+          pushToast({ text: '已导出这段会话', tone: 'ok' })
+        },
+      },
       { label: '删除', onSelect: () => deleteConversation(id), danger: true },
     ]
   }
@@ -183,20 +219,94 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
         {/* 里面的内容宽度锁死 —— 侧边栏收起时是「宽度归零」，不是「内容挤扁」 */}
         <div className="flex h-full w-[280px] shrink-0 flex-col lg:w-[260px]">
           <div className="border-b border-line px-3 py-3">
-            <div className="mb-3 px-1 font-serif text-[15px] tracking-[-0.01em] text-ink">
-              Hippocrene
-            </div>
+            <div className="mb-3 px-1 font-serif text-[15px] tracking-[-0.01em] text-ink">Free Chat</div>
             <button type="button" className="btn btn-primary w-full" onClick={onNew}>
               <Plus size={15} weight="bold" />
               新对话
             </button>
+            <label className="sidebar-search mt-2">
+              <MagnifyingGlass size={13} weight="bold" className="shrink-0 text-faint" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setQuery('')
+                    e.currentTarget.blur()
+                  }
+                  if (e.key === 'Enter' && hits && hits.length) {
+                    onSelect(hits[0].conv.id)
+                  }
+                }}
+                placeholder="搜索会话"
+                aria-label="搜索会话"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-faint"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  className="shrink-0 rounded-xs p-0.5 text-faint hover:text-ink"
+                  onClick={() => setQuery('')}
+                  aria-label="清空搜索"
+                >
+                  <X size={11} weight="bold" />
+                </button>
+              ) : (
+                <kbd className="kbd kbd-hint shrink-0">{modKey}K</kbd>
+              )}
+            </label>
           </div>
 
           <nav
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-3"
             aria-label="会话列表"
           >
-            {pinned.length > 0 && (
+            {hits && (
+              <div>
+                <div className="px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
+                  {hits.length ? `找到 ${hits.length} 段会话` : '没有找到'}
+                </div>
+                {hits.map((h) => (
+                  <button
+                    key={h.conv.id}
+                    type="button"
+                    onClick={() => onSelect(h.conv.id)}
+                    className={[
+                      'mb-0.5 block w-full rounded-sm px-2 py-1.5 text-left transition-colors',
+                      h.conv.id === activeId ? 'bg-surface-2' : 'hover:bg-surface-2',
+                    ].join(' ')}
+                  >
+                    <span className="block truncate text-[13px] text-ink">{h.conv.title || '未命名会话'}</span>
+                    {h.snippet && (
+                      <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-[1.5] text-muted">
+                        {splitMarks(h.snippet, h.marks).map((p, i) =>
+                          p.hit ? (
+                            <mark key={i} className="search-mark">
+                              {p.text}
+                            </mark>
+                          ) : (
+                            <span key={i}>{p.text}</span>
+                          ),
+                        )}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!hits && !historyLoaded && (
+              <div className="px-2 py-1 text-[12px] text-faint">正在读取本地历史…</div>
+            )}
+
+            {!hits && historyLoaded && pinned.length === 0 && groups.length === 0 && (
+              <div className="px-2 py-1 text-[12px] leading-[1.6] text-faint">
+                还没有会话。聊过的内容只保存在这个浏览器里。
+              </div>
+            )}
+
+            {!hits && pinned.length > 0 && (
               <div className="mb-4 last:mb-0">
                 <div className="px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
                   已置顶
@@ -205,7 +315,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
               </div>
             )}
 
-            {groups.map((group) => (
+            {!hits && groups.map((group) => (
               <div key={group.name} className="mb-4 last:mb-0">
                 <div className="px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
                   {group.name}
@@ -216,7 +326,19 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
             ))}
           </nav>
 
-          <div className="flex items-center justify-end border-t border-line px-3 py-2">
+          <div className="flex items-center justify-between border-t border-line px-3 py-2">
+            <button
+              type="button"
+              className="btn btn-ghost h-8 gap-1.5 px-2 text-[12.5px] text-muted hover:text-ink"
+              onClick={() => {
+                setSettingsOpen(true)
+                onClose()
+              }}
+              title={`设置（${modKey},）`}
+            >
+              <GearSix size={15} weight="bold" />
+              设置与数据
+            </button>
             <button
               type="button"
               className="btn btn-ghost btn-icon"

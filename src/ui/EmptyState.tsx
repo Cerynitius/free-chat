@@ -10,7 +10,7 @@
  */
 
 /** 标题 —— 一笔一笔写出来的就是这几个字 */
-const TITLE = "Hippocrene's Model Chat"
+const TITLE = 'Free Chat'
 
 /** 每个字之间隔多久（毫秒）—— 写字的速度 */
 const CHAR_DELAY_MS = 62

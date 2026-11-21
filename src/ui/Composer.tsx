@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Paperclip, PaperPlaneRight, PencilSimple, Stop, Wrench, X } from '@phosphor-icons/react'
 import { EffortPicker } from './EffortPicker'
 import { formatSize, type Attachment } from '@/lib/attachments'
+import type { SendKey } from '@/state/types'
+import { isMac, modKey } from './shortcuts'
 
 interface Props {
   value: string
@@ -21,6 +23,8 @@ interface Props {
   /** 工具开不开 */
   toolsEnabled: boolean
   onToolsChange: (v: boolean) => void
+  /** Enter 发送，还是 Ctrl/⌘+Enter 发送 */
+  sendKey: SendKey
 }
 
 export function Composer({
@@ -38,6 +42,7 @@ export function Composer({
   onRemoveAttachment,
   toolsEnabled,
   onToolsChange,
+  sendKey,
 }: Props): React.ReactElement {
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -60,8 +65,13 @@ export function Composer({
   const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key !== 'Enter') return
-    if (e.shiftKey || coarse || e.nativeEvent.isComposing) return
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+    const mod = isMac ? e.metaKey : e.ctrlKey
+    if (sendKey === 'mod-enter') {
+      if (!mod) return
+    } else if (e.shiftKey || coarse) {
+      return
+    }
     e.preventDefault()
     if (!streaming && value.trim()) onSend()
   }
@@ -94,6 +104,7 @@ export function Composer({
 
           <textarea
             ref={ref}
+            id="composer-input"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
@@ -101,7 +112,15 @@ export function Composer({
             onBlur={() => setFocused(false)}
             rows={1}
             placeholder={
-              streaming ? '正在生成…' : editing ? '改完直接发 —— 这一轮会被替换' : '说点什么…（Enter 发送，Shift+Enter 换行）'
+              streaming
+                ? '正在生成…'
+                : editing
+                  ? '改完直接发 —— 这一轮会被替换'
+                  : coarse
+                    ? '说点什么…'
+                    : sendKey === 'mod-enter'
+                    ? `说点什么…（${modKey}Enter 发送，Enter 换行）`
+                    : '说点什么…（Enter 发送，Shift+Enter 换行）'
             }
             className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.7] text-ink outline-none placeholder:text-faint"
             aria-label="输入消息"

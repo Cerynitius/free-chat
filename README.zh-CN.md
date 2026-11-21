@@ -1,11 +1,11 @@
 <!-- sections: intro features quickstart connect deploy settings design dev contribute license -->
 
-# Hippocrene's Model Chat
+# Free Chat
 
 [英文](README.md) | [简体中文](README.zh-CN.md)
 
 ![许可证 MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square)
-![版本 0.1.0](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)
+![版本 0.2.0](https://img.shields.io/badge/version-0.2.0-111111?style=flat-square)
 ![部署 GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![一键部署到 Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
@@ -16,9 +16,9 @@
 <a id="intro"></a>
 ## 项目简介
 
-**Hippocrene's Model Chat** 是一个单页对话客户端，只服务一个模型：`dsv4-flash`（DeepSeek-V4-Flash-0731-CRACK），在 `https://182.92.245.176:1920` 上。界面参照 DeepSeek.com：桌面上是常驻侧边栏（可以收起来），手机上是抽屉，答案流式吐字时右下角有闪烁光标，模型的思考过程单独放在一个可折叠面板里（定高视窗，思考内容一行行往上滚），与正文分开显示。
+**Free Chat** 是一个单页对话客户端（fork 自 [JiHuiYiYou/hippocrenes-model-chat](https://github.com/JiHuiYiYou/hippocrenes-model-chat)），只服务一个模型：`dsv4-flash`（DeepSeek-V4-Flash-0731-CRACK），在 `https://182.92.245.176:1920` 上。界面参照 DeepSeek.com：桌面上是常驻侧边栏（可以收起来），手机上是抽屉，答案流式吐字时右下角有闪烁光标，模型的思考过程单独放在一个可折叠面板里（定高视窗，思考内容一行行往上滚），与正文分开显示。
 
-没有配置界面，也没有模型选择器。源站地址、模型 id、API key、采样参数、默认思考档位全部写在 `src/config.ts` 里，那是唯一的真相源。运行时只有三样东西还能调：主题、思考档位，以及侧边栏是不是收着的。界面文案目前是中文的。
+没有模型选择器，也不做通用 API 配置。源站地址、模型 id、API key、采样参数全部写在 `src/config.ts` 里，那是唯一的真相源。界面上能调的是使用习惯：主题、字号、发送键、思考档位、工具开关、自定义指令，全部存在访客自己的浏览器里。界面文案目前是中文的。
 
 上游用 Server-Sent Events 讲 OpenAI 的 chat-completions 协议，用 `curl` 完全正常，但它一个 CORS 响应头都不给，浏览器页面没法直接调。所以仓库里带了一份零依赖的反向代理，放在 `proxy/` 目录下，专门解决浏览器需要的三件事：自己应答 CORS 预检、在服务端注入 API key、把 SSE 原样流式透传。
 
@@ -42,7 +42,12 @@
 | 消息操作 | 重新生成、随时停止生成、复制回答（纯文本或 Markdown）、改写问题（改写即重写：这一轮之后的话全部作废，重新问一遍） |
 | 工具 | 模型自己够得着的四样：搜网页、抓网页、读附件、把图片里的字认出来。每一次调用都在回答里画成一张卡片，写清楚调了什么、传了什么参数、回来什么结果 |
 | 报错 | 上游的错翻成人话：上游满了就说满了并等一分钟重试（最多五次），密钥不对就说密钥该配在哪儿，连不上就说断在哪一跳 —— 上游原话压在下面当小字，需要的时候翻它 |
-| 本地历史 | 会话存在本地，按今天 / 昨天 / 本周 / 更早分组；自动命名，可重命名、可置顶，右键呼出「重命名 / 置顶 / 删除」 |
+| 本地历史 | 会话存在浏览器的 IndexedDB 里，不限条数；按今天 / 昨天 / 本周 / 更早分组；自动命名，可重命名、可置顶，右键呼出「重命名 / 置顶 / 导出 / 删除」；同一浏览器开多个标签页时互相同步 |
+| 搜索 | 侧栏搜索框（`Ctrl+K`）在标题和全部消息正文里找，多个词用空格隔开，结果带命中片段和高亮 |
+| 导出与导入 | 单段会话导出为 Markdown（可选带思考过程）；全部会话导出为 JSON 备份，能原样导回，同一段会话留更新的那份 |
+| 设置与数据 | 侧栏底部「设置与数据」（`Ctrl+,`）：主题、字号、发送键、自定义指令；显示本地存储用量，可申请持久存储，可清空全部会话 |
+| 草稿 | 没发出去的话按会话保存，刷新或切走再回来都还在 |
+| 快捷键 | `Ctrl+K` 搜索、`Ctrl+Shift+O` 新对话、`Ctrl+Shift+S` 收起侧栏、`Ctrl+,` 设置、`/` 跳到输入框、`Esc` 停止生成（macOS 用 `⌘`） |
 | 主题 | 浅色 / 深色 / 跟随系统，侧栏底部一个图标按钮就能切 |
 | 布局 | 桌面常驻侧边栏（可以收起来），手机抽屉，移动端用 `visualViewport` 适配软键盘 |
 | 欢迎界面 | 每次进来都是一个新的空会话，老的都在侧边栏里点一下就到；品牌字在一个字一个字写出来，写完留一道金线 —— 不想看动效的人直接看到写完的样子 |
@@ -58,8 +63,8 @@
 想跑自己那份的话，克隆下来装完依赖就行。本地代理不用注册，也不用在任何地方开账号。
 
 ```bash
-git clone https://github.com/JiHuiYiYou/hippocrenes-model-chat.git
-cd hippocrenes-model-chat
+git clone https://github.com/Cerynitius/free-chat.git
+cd free-chat
 npm install
 ```
 
@@ -492,7 +497,7 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 <a id="settings"></a>
 ## 可调项
 
-没有配置界面。运行时能调的就四项，而且都能在界面上直接点到：
+下面这些都能在界面上直接调，存在访客自己的浏览器里（`localStorage`）：
 
 | 可调项 | 默认值 | 入口 | 说明 |
 |---|---|---|---|
@@ -500,6 +505,10 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 | 思考档位 | `low` | 输入框左下角的 chip | 取 `off`、`none`、`low`、`high`、`max`，作为 `reasoning_effort` 每次请求都带上。 |
 | 工具 | 开 | 输入框左下角的 chip | 模型能不能调工具。关掉的话请求里就不带 `tools`，模型只聊天。 |
 | 侧边栏收起 | 展开 | 主区左上角的图标按钮 | 把桌面端侧边栏收起来，下次进来还记得。 |
+| 字号 | 中 | 设置与数据 | 对话正文 14 / 15 / 17 px。 |
+| 发送键 | Enter | 设置与数据 | `Enter` 发送（`Shift+Enter` 换行），或 `Ctrl/⌘+Enter` 发送（`Enter` 换行）。触屏设备上 Enter 总是换行。 |
+| 自定义指令 | 空 | 设置与数据 | 每一轮都附在系统提示词后面发给模型，最多 2000 字。 |
+| 导出带思考过程 | 关 | 设置与数据 | 单段会话导出 Markdown 时，把思考过程放进可折叠块。 |
 
 其余参数全部写死在 `src/config.ts` 里，界面上不提供修改：源站地址、代理地址、API key、模型 id、`temperature`、`top_p`、`max_tokens`、系统提示词。想改其中任何一个，只能改那一个文件然后重新构建。
 
@@ -634,11 +643,11 @@ hippocrenes-model-chat/
 
 状态拆成三个 slice，共用一份类型模块，所以任何 slice 都不用 import 另一个 slice：
 
-- `settingsSlice` 放三个运行时选项：主题、思考档位，还有工具开不开。
+- `settingsSlice` 放运行时选项：主题、思考档位、工具开关、字号、发送键、自定义指令。
 - `chatSlice` 放会话和流式生命周期。收到的 SSE 分片先进缓冲，再以每秒十二次左右的频率刷进 store，这样长答案不会每来一个 token 就重渲染一遍。工具循环也在这儿：工具调用跑完，结果回喂给模型，回答接着写进同一条消息。
 - `uiSlice` 放侧边栏的开关、滚动位置、未读计数和 toast。
 
-会话与设置持久化在 `localStorage` 的 `hippocrenes.chat.v2` 键下，写入有 400 毫秒防抖，最多留 50 条会话。
+会话存在 IndexedDB（库 `free-chat`，一段会话一条记录），只写改过的那几条，400 毫秒防抖、最长 2 秒必写，切到后台或关页面时立刻写。设置和草稿在 `localStorage`（`freechat.prefs.v1`、`freechat.drafts.v1`）。同一浏览器的多个标签页通过 `BroadcastChannel` 互相通知改了哪几条。旧版本 `hippocrenes.chat.v2` 里的会话在第一次打开新版本时自动搬进 IndexedDB。
 
 <a id="contribute"></a>
 ## 参与贡献
@@ -650,4 +659,4 @@ hippocrenes-model-chat/
 
 以 MIT 许可证发布，完整文本见 [LICENSE](LICENSE)。
 
-当前版本：`0.1.0`
+当前版本：`0.2.0`

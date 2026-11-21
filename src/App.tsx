@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, SidebarSimple } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { applyTheme } from '@/lib/theme'
 import { addFile, removeAttachment, type Attachment } from '@/lib/attachments'
+import { loadDraft, saveDraft } from '@/lib/storage'
 import { Composer } from '@/ui/Composer'
+import { SettingsDialog } from '@/ui/SettingsDialog'
+import { useGlobalShortcuts } from '@/ui/shortcuts'
 import { EmptyState } from '@/ui/EmptyState'
 import { MessageList } from '@/ui/MessageList'
 import { Sidebar } from '@/ui/Sidebar'
@@ -25,6 +28,8 @@ export function App(): React.ReactElement {
   const newConversation = useApp((s) => s.newConversation)
   const editMessage = useApp((s) => s.editMessage)
   const pushToast = useApp((s) => s.pushToast)
+  const focusSearch = useApp((s) => s.focusSearch)
+  const setSettingsOpen = useApp((s) => s.setSettingsOpen)
 
   const [input, setInput] = useState('')
   /** 正在改写的那条消息 —— 发出去会替换掉它后面的整轮对话 */
@@ -63,16 +68,51 @@ export function App(): React.ReactElement {
     }
   }, [])
 
-  // 换了会话 ⇒ 手上改到一半的东西作废
+  // 字号挂在 <html> 上，CSS 按它缩放正文
+  useEffect(() => {
+    document.documentElement.dataset.fontSize = settings.fontSize
+  }, [settings.fontSize])
+
+  // 换了会话 ⇒ 改写模式作废；输入框换成那个会话没发出去的草稿
+  const convId = conversation?.id
   useEffect(() => {
     setEditing(null)
-    setInput('')
-  }, [conversation?.id])
+    setInput(convId ? loadDraft(convId) : '')
+  }, [convId])
+
+  // 草稿：边打边存（攒 300 ms），刷新、切走再回来都还在。改写模式下打的字不算草稿
+  const draftTimer = useRef<number | null>(null)
+  useEffect(() => {
+    if (!convId || editing) return
+    if (draftTimer.current !== null) window.clearTimeout(draftTimer.current)
+    draftTimer.current = window.setTimeout(() => saveDraft(convId, input), 300)
+    return () => {
+      if (draftTimer.current !== null) window.clearTimeout(draftTimer.current)
+    }
+  }, [convId, input, editing])
+
+  useGlobalShortcuts({
+    search: focusSearch,
+    newChat: () => onNewChat(),
+    settings: () => setSettingsOpen(true),
+    toggleSidebar: () => setSidebarCollapsed(!useApp.getState().sidebarCollapsed),
+    focusComposer: () => document.getElementById('composer-input')?.focus(),
+    stop: () => {
+      if (!useApp.getState().streamingId) return false
+      stopGeneration()
+      return true
+    },
+  })
 
   const onSend = (): void => {
     const text = input
     if (!text.trim()) return
-    setInput('')
+    // 改写发出去之后，输入框回到这段会话原来的草稿；正常发送则草稿就是刚发的这句，清掉
+    if (editing) setInput(convId ? loadDraft(convId) : '')
+    else {
+      setInput('')
+      if (convId) saveDraft(convId, '')
+    }
     // 附件名跟着消息走 —— 模型得知道有哪些文件可读
     const names = attachments.map((a) => a.name)
     if (editing) {
@@ -92,13 +132,12 @@ export function App(): React.ReactElement {
 
   const onCancelEdit = (): void => {
     setEditing(null)
-    setInput('')
+    setInput(convId ? loadDraft(convId) : '')
   }
 
   const onNewChat = (): void => {
     newConversation()
     setEditing(null)
-    setInput('')
   }
 
   /**
@@ -193,9 +232,11 @@ export function App(): React.ReactElement {
           onRemoveAttachment={onRemoveAttachment}
           toolsEnabled={settings.tools}
           onToolsChange={(v) => updateSettings({ tools: v })}
+          sendKey={settings.sendKey}
         />
       </main>
 
+      <SettingsDialog />
       <Toast />
     </div>
   )

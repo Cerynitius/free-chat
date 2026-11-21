@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-21
+
+Renamed to **Free Chat** (fork of JiHuiYiYou/hippocrenes-model-chat).
+
+### Added
+
+- Conversations live in IndexedDB instead of `localStorage`: no more 50-conversation cap or 5 MB ceiling. Only the conversations that changed are written; writes are debounced by 400 ms with a 2-second ceiling and flushed when the page is hidden. Conversations from the old `hippocrenes.chat.v2` key are moved over on first start.
+- Several tabs of the same browser stay in sync over a `BroadcastChannel`: each tab rereads only the conversations another tab changed, and a conversation that is streaming in this tab is never overwritten by another tab's copy.
+- Search in the sidebar (`Ctrl/⌘+K`) over titles and every message body, with a highlighted excerpt.
+- Export one conversation as Markdown (from its menu, optionally with the thinking), export everything as a JSON backup, and import a backup back; a conversation present on both sides keeps the newer copy.
+- A settings and data panel (`Ctrl/⌘+,`): theme, font size, send key, custom instructions appended to the system prompt, local storage usage, a request for persistent storage, and clearing every conversation.
+- Drafts: unsent text is kept per conversation across reloads and switches.
+- Keyboard shortcuts: `Ctrl/⌘+K`, `Ctrl/⌘+Shift+O`, `Ctrl/⌘+Shift+S`, `Ctrl/⌘+,`, `/`, `Esc`.
+
+### Fixed
+
+- Code blocks lost their line breaks and indentation and were drawn with the inline-code box: the block was a `div`, so whitespace collapsed and the inline `code` style applied. It is a `pre` again.
+- A message that was still streaming when the page closed no longer shows as generating forever after a reload; it is marked as cut off.
+
 ### Added
 
 - Tool calling, end to end. The model can reach for four tools on its own now: `web_search`, `web_fetch`, `read_file` and `ocr`. The client sends the tool definitions with every request, runs whatever the model asks for, feeds the result back as a `role: "tool"` message, and lets the model carry on. The answer stays a single message, and every call shows up in it as a card with its arguments and its result. The upstream turned out to speak the standard OpenAI tool protocol all along: it answers with `delta.tool_calls` (arguments streamed in pieces) and `finish_reason: "tool_calls"`, and it accepts the tool result that follows. The README used to say tool calling was not supported; that line was wrong, and both READMEs now carry what was actually measured.

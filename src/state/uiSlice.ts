@@ -6,6 +6,12 @@ export const uiSlice = (set: AppSet): UiSlice => ({
   atBottom: true,
   unread: 0,
   toasts: [],
+  historyLoaded: false,
+  settingsOpen: false,
+  searchFocusTick: 0,
+  setSettingsOpen: (v) => set({ settingsOpen: v }),
+  focusSearch: () =>
+    set((s) => ({ searchFocusTick: s.searchFocusTick + 1, sidebarOpen: true, sidebarCollapsed: false })),
 
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
   setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),

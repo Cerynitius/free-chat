@@ -137,14 +137,26 @@ export interface Conversation {
 }
 
 /**
- * 只有三样东西还归用户管：主题、思考档位，和工具开不开。
+ * 归用户管的只有界面和习惯上的东西（存在本地浏览器里）。
  * 端点、key、模型、采样参数全部写死在 src/config.ts —— 界面不做通用 API 配置。
  */
+export type FontSize = 'sm' | 'md' | 'lg'
+
+/** 发送键：Enter 发送（Shift+Enter 换行），或 Ctrl/⌘+Enter 发送（Enter 换行） */
+export type SendKey = 'enter' | 'mod-enter'
+
 export interface Settings {
   theme: ThemeMode
   effort: ReasoningEffort
   /** 工具（搜索 / 抓页面 / 读文件 / 认字）要不要开着 */
   tools: boolean
+  /** 正文字号 */
+  fontSize: FontSize
+  sendKey: SendKey
+  /** 自定义指令：每次对话都附在系统提示后面（比如「回答用简体中文、先给结论」） */
+  instructions: string
+  /** 导出 / 复制时带不带思考过程 */
+  exportReasoning: boolean
 }
 
 export interface Toast {
@@ -181,6 +193,10 @@ export interface ChatSlice {
    * 用新内容替换，然后让模型重新回答这一轮。
    */
   editMessage: (messageId: string, text: string, attachments?: string[]) => Promise<void>
+  /** 导入会话（备份文件）：同 id 的留更新的那份。返回新增 / 更新的条数 */
+  importConversations: (list: Conversation[]) => { added: number; updated: number }
+  /** 删掉全部会话（正在生成的那条除外） */
+  clearConversations: () => void
 }
 
 export interface UiSlice {
@@ -192,6 +208,14 @@ export interface UiSlice {
   /** 用户往上滚之后又到的消息数 */
   unread: number
   toasts: Toast[]
+  /** 本地历史读完了没有（IndexedDB 是异步的） */
+  historyLoaded: boolean
+  /** 设置面板开着没有 */
+  settingsOpen: boolean
+  /** 侧边栏搜索框要不要拿焦点（Ctrl+K 递增这个数） */
+  searchFocusTick: number
+  setSettingsOpen: (v: boolean) => void
+  focusSearch: () => void
   setSidebarOpen: (v: boolean) => void
   setSidebarCollapsed: (v: boolean) => void
   setAtBottom: (v: boolean) => void

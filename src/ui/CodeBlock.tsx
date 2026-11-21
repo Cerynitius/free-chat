@@ -28,9 +28,9 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }): React
           {copied ? <Check size={15} weight="bold" /> : <Copy size={15} weight="bold" />}
         </button>
       </div>
-      <div className="code-block__pre">
+      <pre className="code-block__pre">
         <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
-      </div>
+      </pre>
     </div>
   )
 }

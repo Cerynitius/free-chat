@@ -85,7 +85,7 @@ export function MessageItem({
   if (message.role === 'user') {
     return (
       <div className="group flex flex-col items-end gap-1.5">
-        <div className="max-w-[85%] rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-[15px] leading-[1.7] text-ink-2 whitespace-pre-wrap sm:max-w-[75%]">
+        <div className="max-w-[85%] rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-[length:var(--text-body)] leading-[1.7] text-ink-2 whitespace-pre-wrap sm:max-w-[75%]">
           {message.content}
         </div>
 

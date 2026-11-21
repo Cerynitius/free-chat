@@ -245,6 +245,7 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
           return await runChat({
             messages: outgoing,
             effort,
+            instructions: get().settings.instructions,
             signal: ctrl.signal,
             ...(useTools ? { tools: toolDefinitions() } : {}),
             onReasoning: (chunk) => {
@@ -615,6 +616,40 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
 
     stopGeneration: () => {
       controller?.abort()
+    },
+
+    importConversations: (list) => {
+      let added = 0
+      let updated = 0
+      set((s) => {
+        const byId = new Map(s.conversations.map((c) => [c.id, c]))
+        for (const c of list) {
+          const cur = byId.get(c.id)
+          if (!cur) {
+            byId.set(c.id, c)
+            added += 1
+          } else if (c.updatedAt > cur.updatedAt && !cur.messages.some((m) => m.id === s.streamingId)) {
+            byId.set(c.id, c)
+            updated += 1
+          }
+        }
+        return { conversations: [...byId.values()] }
+      })
+      return { added, updated }
+    },
+
+    clearConversations: () => {
+      controller?.abort()
+      const now = Date.now()
+      const fresh: Conversation = {
+        id: uid(),
+        title: '',
+        pinned: false,
+        messages: [],
+        createdAt: now,
+        updatedAt: now,
+      }
+      set({ conversations: [fresh], activeId: fresh.id, streamingId: null })
     },
   }
 }

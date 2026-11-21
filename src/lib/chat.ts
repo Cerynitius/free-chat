@@ -40,6 +40,8 @@ export interface ChatParams {
   onContent: (chunk: string) => void
   /** 发给上游的工具清单 —— 不给就是不带工具 */
   tools?: ToolDefinition[]
+  /** 用户的自定义指令（设置里填的），附在系统提示后面 */
+  instructions?: string
 }
 
 /** 一次生成的结果 —— 重点是「它到底有没有说完」。 */
@@ -64,10 +66,16 @@ export interface ChatOutcome {
  *   分片式到达 —— 必须分别累积、分别渲染。
  */
 export async function runChat(p: ChatParams): Promise<ChatOutcome> {
+  const system = [
+    SYSTEM_PROMPT.trim(),
+    p.instructions?.trim() ? `用户的自定义指令（每一轮都要遵守）：\n${p.instructions.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const body = {
     model: MODEL,
-    messages: SYSTEM_PROMPT.trim()
-      ? ([{ role: 'system' as const, content: SYSTEM_PROMPT }, ...p.messages] as OutgoingMessage[])
+    messages: system
+      ? ([{ role: 'system' as const, content: system }, ...p.messages] as OutgoingMessage[])
       : p.messages,
     // ★ 这个后端强制要求 stream:true，stream:false 直接 400
     stream: true,

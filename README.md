@@ -1,11 +1,11 @@
 <!-- sections: intro features quickstart connect deploy settings design dev contribute license -->
 
-# Hippocrene's Model Chat
+# Free Chat
 
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 ![License MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square)
-![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)
+![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-111111?style=flat-square)
 ![Deploy GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-111111?style=flat-square)
 [![Deploy to Cloudflare](https://deploy.workers.dev/button)](https://deploy.workers.dev/?url=https://github.com/JiHuiYiYou/hippocrenes-model-chat)
 
@@ -16,9 +16,9 @@ A ready-to-use streaming chat client for `dsv4-flash`, with a collapsible reason
 <a id="intro"></a>
 ## Introduction
 
-**Hippocrene's Model Chat** is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop that can be folded away, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer, in a fixed-height window that scrolls as the thinking grows.
+**Free Chat** (forked from [JiHuiYiYou/hippocrenes-model-chat](https://github.com/JiHuiYiYou/hippocrenes-model-chat)) is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop that can be folded away, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer, in a fixed-height window that scrolls as the thinking grows.
 
-There is no configuration screen and no model picker. The origin URL, the model id, the API key, the sampling parameters, and the default reasoning effort all live in `src/config.ts`, which is the single source of truth. Only three things stay adjustable at runtime: the theme, the reasoning effort, and whether the sidebar is folded.
+There is no model picker and no generic API configuration. The origin URL, the model id, the API key and the sampling parameters live in `src/config.ts`, which is the single source of truth. What the interface does let you adjust are habits: theme, font size, send key, reasoning effort, tools, and custom instructions, all stored in the visitor's own browser.
 
 The upstream speaks the OpenAI chat-completions protocol over Server-Sent Events and is perfectly usable from `curl`, but it serves no CORS headers at all, so a browser page cannot talk to it directly. The repository therefore ships a zero-dependency reverse proxy in `proxy/` that fixes the three things a browser needs: it answers the CORS preflight itself, injects the API key from the server side, and streams the SSE response through untouched.
 
@@ -42,7 +42,12 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Actions | Regenerate an answer, stop generation mid-flight, copy an answer as plain text or as Markdown, and rewrite a question — editing it drops the whole round that followed and asks again |
 | Tools | Four tools the model can reach for on its own: search the web, fetch a page, read an attachment, and read the text out of a picture. Every call shows up as a card in the answer, with its arguments and its result |
 | Errors | Upstream failures are written for people: a full upstream says so and waits a minute before trying again, up to five times, a wrong key says where the key belongs, a dropped connection says which hop broke — the upstream's own words stay underneath, in smaller type, for the times that is not enough |
-| History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; each one is named automatically, can be renamed and pinned, and offers rename / pin / delete from a right-click menu |
+| History | Conversations are stored in the browser's IndexedDB with no count limit, grouped by today, yesterday, this week, and earlier; each one is named automatically, can be renamed and pinned, and offers rename / pin / export / delete from a right-click menu; several tabs of the same browser stay in sync |
+| Search | The sidebar search box (`Ctrl+K`) looks through titles and every message body; space-separated words must all appear; results show the matching excerpt with highlights |
+| Export and import | One conversation exports as Markdown (optionally with the thinking); all conversations export as a JSON backup that imports back as-is, keeping the newer copy of a conversation that exists on both sides |
+| Settings and data | The settings button at the bottom of the sidebar (`Ctrl+,`): theme, font size, send key, custom instructions; shows local storage usage, can request persistent storage, can clear every conversation |
+| Drafts | Unsent text is kept per conversation and survives a reload or a switch to another conversation |
+| Shortcuts | `Ctrl+K` search, `Ctrl+Shift+O` new chat, `Ctrl+Shift+S` fold the sidebar, `Ctrl+,` settings, `/` jump to the composer, `Esc` stop generating (`⌘` on macOS) |
 | Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
 | Layout | Persistent sidebar on desktop that can be folded away, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
 | Welcome | Every visit opens on a fresh conversation; the previous ones are one click away in the sidebar. The title is written out letter by letter on a pale paper wash, with a hairline gold rule underneath — readers who ask for less motion get the finished page instead |
@@ -58,8 +63,8 @@ The published site already works. The proxy is hosted on a GitHub Actions runner
 To run your own copy instead, clone the repository and install the dependencies. The local proxy needs no registration and no account anywhere.
 
 ```bash
-git clone https://github.com/JiHuiYiYou/hippocrenes-model-chat.git
-cd hippocrenes-model-chat
+git clone https://github.com/Cerynitius/free-chat.git
+cd free-chat
 npm install
 ```
 
@@ -490,7 +495,7 @@ The deployment publishes static files only. It does not proxy the API, does not 
 <a id="settings"></a>
 ## Adjustable Options
 
-There is no configuration screen. Four options are adjustable at runtime, and all of them are reachable directly from the interface:
+Everything below is adjustable from the interface and stored in the visitor's own browser (`localStorage`):
 
 | Option | Default | Where | Description |
 |---|---|---|---|
@@ -498,6 +503,10 @@ There is no configuration screen. Four options are adjustable at runtime, and al
 | Reasoning effort | `low` | Chip at the bottom-left of the composer | One of `off`, `none`, `low`, `high`, `max`. Sent as `reasoning_effort` with every request. |
 | Tools | on | Chip at the bottom-left of the composer | Whether the model may call tools. Off means the request carries no `tools` and the model just talks. |
 | Sidebar fold | unfolded | Icon button at the top-left of the main area | Folds the desktop sidebar away. Remembered across visits. |
+| Font size | medium | Settings and data | Message text at 14 / 15 / 17 px. |
+| Send key | Enter | Settings and data | `Enter` sends (`Shift+Enter` for a new line), or `Ctrl/⌘+Enter` sends (`Enter` for a new line). On touch devices Enter always starts a new line. |
+| Custom instructions | empty | Settings and data | Appended to the system prompt on every turn, 2000 characters at most. |
+| Export with thinking | off | Settings and data | Puts the thinking into a collapsible block when one conversation is exported as Markdown. |
 
 Everything else is hardcoded in `src/config.ts` and is not editable in the interface: the origin URL, the proxy URL, the API key, the model id, `temperature`, `top_p`, `max_tokens`, and the system prompt. Changing any of them means editing that one file and rebuilding.
 
@@ -632,11 +641,11 @@ hippocrenes-model-chat/
 
 State is split into three slices over a common type module, so no slice has to import another one:
 
-- `settingsSlice` holds the three runtime options: the theme, the reasoning effort, and whether the tools are on.
+- `settingsSlice` holds the runtime options: theme, reasoning effort, tools, font size, send key, and custom instructions.
 - `chatSlice` holds conversations and the streaming lifecycle. Incoming SSE frames are buffered and flushed to the store twelve times per second, which keeps a long answer from re-rendering the tree on every token. It also runs the tool loop: a tool call is executed, its result goes back to the model, and the answer continues in the same message.
 - `uiSlice` holds sidebar visibility, scroll position, unread counters, and toasts.
 
-Conversations and settings are persisted to `localStorage` under the key `hippocrenes.chat.v2`, debounced by 400 milliseconds, and capped at 50 conversations.
+Conversations live in IndexedDB (database `free-chat`, one record per conversation). Only changed conversations are written, debounced by 400 milliseconds with a 2-second ceiling, and flushed at once when the page is hidden or closed. Settings and drafts live in `localStorage` (`freechat.prefs.v1`, `freechat.drafts.v1`). Tabs of the same browser tell each other which conversations changed over a `BroadcastChannel`. Conversations from the old `hippocrenes.chat.v2` key move into IndexedDB the first time the new version opens.
 
 <a id="contribute"></a>
 ## Contributing
@@ -648,4 +657,4 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first:
 
 Released under the MIT License. See [LICENSE](LICENSE) for the full text.
 
-Current version: `0.1.0`
+Current version: `0.2.0`
