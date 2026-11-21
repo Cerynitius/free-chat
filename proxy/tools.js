@@ -158,31 +158,40 @@ function isBlockedAddress(ip) {
  * （Node 里没法用 require('dns')，那会把这个文件钉死在 Node 上）。
  */
 async function resolveHost(host) {
+  // 几家同时问，谁先给出地址用谁：部署在境内时 Cloudflare / Google 的 DoH 不通，
+  // 逐个试会先白等两轮超时；阿里的 /resolve 是同一种 JSON 格式，境内外都能连。
   const endpoints = [
     (name, type) =>
       `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${type}`,
     (name, type) => `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`,
+    (name, type) => `https://dns.alidns.com/resolve?name=${encodeURIComponent(name)}&type=${type}`,
   ]
-  const ips = []
-  for (const build of endpoints) {
-    for (const type of ['A', 'AAAA']) {
-      try {
-        const res = await fetch(build(host, type), {
-          headers: { Accept: 'application/dns-json' },
-          signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined,
-        })
-        if (!res.ok) continue
-        const json = await res.json()
-        for (const answer of json.Answer || []) {
-          if (answer.type === 1 || answer.type === 28) ips.push(String(answer.data))
-        }
-      } catch {
-        // 这个端点不通就试下一个
-      }
+  const ask = async (url) => {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: 'application/dns-json' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined,
+      })
+      if (!res.ok) return []
+      const json = await res.json()
+      return (json.Answer || [])
+        .filter((a) => a.type === 1 || a.type === 28)
+        .map((a) => String(a.data))
+    } catch {
+      return []
     }
-    if (ips.length) break
   }
-  return ips
+  const lookups = endpoints.map(async (build) => {
+    const [a, aaaa] = await Promise.all([ask(build(host, 'A')), ask(build(host, 'AAAA'))])
+    const ips = [...a, ...aaaa]
+    if (!ips.length) throw new Error('no answer')
+    return ips
+  })
+  try {
+    return await Promise.any(lookups)
+  } catch {
+    return []
+  }
 }
 
 /**
