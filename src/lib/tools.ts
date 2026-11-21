@@ -287,7 +287,12 @@ const ocr: Tool = {
     if (!path) return { ok: false, content: '既没有文件名也没有网址。', summary: '没给图片' }
     const attachment = findAttachment(path)
     if (!attachment) {
-      return { ok: false, content: `附件里没有「${path}」。`, summary: '没有这个文件' }
+      const names = '（当前附件：' + (listNames() || '无') + '）'
+      return {
+        ok: false,
+        content: `附件里没有「${path}」${names}。刷新页面后附件就没了。`,
+        summary: '没有这个文件',
+      }
     }
     if (attachment.kind !== 'image') {
       return { ok: false, content: `${attachment.name} 不是图片。`, summary: '不是图片' }

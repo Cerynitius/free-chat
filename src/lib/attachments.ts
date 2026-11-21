@@ -113,16 +113,27 @@ export function clearAttachments(): void {
  * 模型给的名字未必跟上传时一模一样（可能改过大小写、可能带了路径），
  * 所以这里宽松一点：先精确匹配，再退到「包含」。
  */
+/**
+ * 比文件名之前先统一写法。
+ *
+ * Mac 截图的文件名在 AM/PM 前面是窄不换行空格（U+202F），
+ * 模型抄文件名时会写成普通空格，原样比就对不上。
+ * NFKC 把这类特殊空格、全角字符都折成普通写法，再把连续空白并成一个。
+ */
+function normName(name: string): string {
+  return name.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
 export function findAttachment(name: string): Attachment | undefined {
-  const wanted = name.trim().toLowerCase()
+  const wanted = normName(name)
   if (!wanted) return undefined
-  const all = listAttachments()
-  const exact = all.find((a) => a.name.toLowerCase() === wanted)
-  if (exact) return exact
+  const all = listAttachments().map((a) => ({ a, n: normName(a.name) }))
+  const exact = all.find((x) => x.n === wanted)
+  if (exact) return exact.a
   const base = wanted.split(/[\\/]/).pop() ?? wanted
-  const loose = all.find((a) => a.name.toLowerCase() === base)
-  if (loose) return loose
-  return all.find((a) => a.name.toLowerCase().includes(base))
+  const loose = all.find((x) => x.n === base)
+  if (loose) return loose.a
+  return all.find((x) => x.n.includes(base))?.a
 }
 
 /** 人话版的体积 */
