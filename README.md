@@ -44,7 +44,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; each one is named automatically, can be renamed and pinned, and offers rename / pin / delete from a right-click menu |
 | Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
 | Layout | Persistent sidebar on desktop that can be folded away, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
-| Welcome | Every visit opens on a fresh conversation; the previous ones are one click away in the sidebar |
+| Welcome | Every visit opens on a fresh conversation; the previous ones are one click away in the sidebar. The title is written out letter by letter on a pale paper wash, with a hairline gold rule underneath — readers who ask for less motion get the finished page instead |
 | Responsive | One layout that adapts from narrow phones to wide desktops |
 
 Deliberately out of scope: tool calling (the server does not support it), image input (the API has no vision capability), and multi-model switching (there is a single model).
@@ -473,6 +473,9 @@ Defined once in `src/styles.css` and overridden as a block in dark mode, so ever
 | `--color-ink-2` | `#2F3437` | `#D6D5D0` | Secondary text |
 | `--color-muted` | `#787774` | `#8E8D87` | Tertiary text |
 | `--color-faint` | `#A8A7A3` | `#6E6D68` | Quaternary text |
+| `--color-paper-1` | `#FAF8F3` | `#1C1B17` | Welcome screen, the lighter end of the paper wash |
+| `--color-paper-2` | `#F0EDE6` | `#111110` | Welcome screen, the darker end of the paper wash |
+| `--color-gold` | `#A89169` | `#8F7C58` | The hairline rule under the welcome title |
 
 The four semantic tints each ship as a background and an ink pair, used for status and for the syntax theme.
 
@@ -491,7 +494,7 @@ The four semantic tints each ship as a background and an ink pair, used for stat
 | Serif | `Newsreader`, `Lyon Text`, `Songti SC`, `Source Han Serif SC`, `Noto Serif SC`, `Georgia`, `Times New Roman`, serif |
 | Mono | `Geist Mono Variable`, `SF Mono`, `JetBrains Mono`, `Cascadia Code`, `Consolas`, `PingFang SC`, monospace |
 
-Latin text and numerals use Geist, CJK falls back to the system font, and both are geometric sans faces so the mixed setting stays coherent. The fonts are self-hosted, so there is no runtime CDN request. Body text is 15 pixels with a line height of 1.75.
+Latin text and numerals use Geist, CJK falls back to the system font, and both are geometric sans faces so the mixed setting stays coherent. The fonts are self-hosted, so there is no runtime CDN request. Body text is 15 pixels with a line height of 1.75. The welcome title is set in the serif at a fluid size, between 27 and 48 pixels.
 
 ### Shape, depth, and motion
 
@@ -504,7 +507,7 @@ Latin text and numerals use Geist, CJK falls back to the system font, and both a
 | Easing | `cubic-bezier(0.16, 1, 0.3, 1)` | Applied to every transition. |
 | Animation | `transform` and `opacity` only | Two sizes do move, both under 250 ms: the reasoning window unfolds by `max-height`, and the sidebar folds by `width`. |
 
-No gradients, no glow, no glassmorphism, and no emoji anywhere in the interface. Icons come from Phosphor in the Bold and Fill weights only.
+The welcome screen is the one place with a gradient: a very pale paper wash behind the title. Everywhere else there are no gradients, no glow, no glassmorphism, and no emoji. Icons come from Phosphor in the Bold and Fill weights only.
 
 <a id="dev"></a>
 ## Development

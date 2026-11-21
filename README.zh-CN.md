@@ -44,7 +44,7 @@
 | 本地历史 | 会话存在本地，按今天 / 昨天 / 本周 / 更早分组；自动命名，可重命名、可置顶，右键呼出「重命名 / 置顶 / 删除」 |
 | 主题 | 浅色 / 深色 / 跟随系统，侧栏底部一个图标按钮就能切 |
 | 布局 | 桌面常驻侧边栏（可以收起来），手机抽屉，移动端用 `visualViewport` 适配软键盘 |
-| 欢迎界面 | 每次进来都是一个新的空会话，老的都在侧边栏里点一下就到 |
+| 欢迎界面 | 每次进来都是一个新的空会话，老的都在侧边栏里点一下就到；品牌字在一个字一个字写出来，写完留一道金线 —— 不想看动效的人直接看到写完的样子 |
 | 响应式 | 一套布局，从窄屏手机一直适配到宽屏桌面 |
 
 明确不做：tool calling（服务端不支持）、图片输入（这个 API 没有视觉能力）、多模型切换（只有一个模型）。
@@ -475,6 +475,9 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 | `--color-ink-2` | `#2F3437` | `#D6D5D0` | 次级文字 |
 | `--color-muted` | `#787774` | `#8E8D87` | 三级文字 |
 | `--color-faint` | `#A8A7A3` | `#6E6D68` | 四级文字 |
+| `--color-paper-1` | `#FAF8F3` | `#1C1B17` | 欢迎页，纸感渐层亮的一头 |
+| `--color-paper-2` | `#F0EDE6` | `#111110` | 欢迎页，纸感渐层暗的一头 |
+| `--color-gold` | `#A89169` | `#8F7C58` | 欢迎页标题底下那道金线 |
 
 四组语义淡彩各有一份底色和一份字色，用来表示状态，也用来做代码高亮主题。
 
@@ -493,7 +496,7 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 | 衬线 | `Newsreader`、`Lyon Text`、`Songti SC`、`Source Han Serif SC`、`Noto Serif SC`、`Georgia`、`Times New Roman`、`serif` |
 | 等宽 | `Geist Mono Variable`、`SF Mono`、`JetBrains Mono`、`Cascadia Code`、`Consolas`、`PingFang SC`、`monospace` |
 
-拉丁文字和数字走 Geist，中文交给系统字体，两边都是几何无衬线，混排不打架。字体全部自托管，运行时不请求任何 CDN。正文是 15 像素大小，行高 1.75。
+拉丁文字和数字走 Geist，中文交给系统字体，两边都是几何无衬线，混排不打架。字体全部自托管，运行时不请求任何 CDN。正文是 15 像素大小，行高 1.75。欢迎页的标题用衬线体，字号随屏幕在 27 到 48 像素之间走。
 
 ### 形状、层次与动效
 
@@ -506,7 +509,7 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 | 缓动 | `cubic-bezier(0.16, 1, 0.3, 1)` | 所有过渡都用它。 |
 | 动效 | 只动 `transform` 和 `opacity` | 只有两个尺寸会动，都在 250 毫秒以内：思考视窗用 `max-height` 展开，侧边栏用 `width` 收起。 |
 
-不要渐变、不要霓虹、不要玻璃拟态，界面上一个 emoji 都不放。图标只用 Phosphor 的 Bold 和 Fill 两种字重。
+首屏是全站唯一一处渐变：标题后面一层极淡的纸感。其余地方不要渐变、不要霓虹、不要玻璃拟态，界面上一个 emoji 都不放。图标只用 Phosphor 的 Bold 和 Fill 两种字重。
 
 <a id="dev"></a>
 ## 开发
