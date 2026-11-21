@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Copying an answer in two shapes. The button itself copies plain text; the arrow next to it opens a menu with "Copy" and "Copy as Markdown". A plain-text copy drops the heading marks, the emphasis, the list bullets and the code fences, and keeps a formula as its LaTeX source.
 - Editing a question. The pencil button on a user message loads it into the composer; sending it drops that message and everything that came after it, and asks the model again.
 - A fold for the desktop sidebar. The button at the top-left of the main area collapses it to zero width, and the choice is remembered across visits.
-- An automatic retry when the upstream is full. This upstream takes one request per IP — a second one comes back as `429` with `code: "concurrency_limit"`. That is a queue, not a failure, so the client now waits a minute and tries again, and keeps doing so until the request goes through or the user stops it. The message says which attempt it is and how many seconds are left, and the stop button cuts the wait short.
+- An automatic retry when the upstream is full. This upstream takes one request per IP — a second one comes back as `429` with `code: "concurrency_limit"`. That is a queue, not a failure, so the client now waits a minute and tries again, up to five times. The message says which attempt it is and how many seconds are left, and the stop button cuts the wait short. When the queue does not move, the message says so plainly instead of waiting forever.
 
 ### Changed
 

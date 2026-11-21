@@ -58,8 +58,8 @@ function QueueNotice({ notice }: { notice: RetryNotice }): React.ReactElement {
         <div className="font-medium">{notice.message}</div>
         <div className="mt-1 opacity-90">
           {left > 0
-            ? `${left} 秒后自动重试（第 ${notice.attempt} 次）`
-            : `马上重试（第 ${notice.attempt} 次）`}
+            ? `${left} 秒后自动重试（第 ${notice.attempt}/${notice.max} 次）`
+            : `马上重试（第 ${notice.attempt}/${notice.max} 次）`}
         </div>
       </div>
     </div>

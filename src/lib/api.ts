@@ -106,7 +106,7 @@ function friendly(status: number, info: UpstreamError): { message: string; detai
   if (status === 429 || code === 'concurrency_limit' || /concurren/i.test(raw)) {
     return {
       message:
-        '上游同时只接一个请求（服务商最大并行数 1），这次被挤掉了。等前一个跑完，或者过一分钟自动重试。',
+        '上游同时只接一个请求（服务商最大并行数 1），这次被挤掉了 —— 得等前一个跑完。',
       detail: raw,
     }
   }

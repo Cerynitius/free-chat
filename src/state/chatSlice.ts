@@ -14,10 +14,11 @@ const FLUSH_MS = 80
  * 上游同时只接一个请求（服务商最大并行数 1）。
  * 第二个请求会被 429 挡回来 —— 那不是失败，是排队，等一分钟再来。
  *
- * 重试没有次数上限：上游的「满了」是队列，不是故障，等下去总能轮上。
- * 用户想不想要这条队列，由「停止生成」说了算。
+ * 排队有次数上限：排了这么久还没轮到，就明说排不上，
+ * 别让一条消息永远挂在「即将重试」上。
  */
 const CONCURRENCY_WAIT_MS = 60_000
+const CONCURRENCY_MAX_ATTEMPTS = 5
 
 /** 等一会儿（或者等到用户喊停） */
 function wait(ms: number, signal: AbortSignal): Promise<void> {
@@ -192,11 +193,24 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
         } catch (err) {
           if (!isConcurrencyError(err)) throw err
 
+          // 排了这么久还没轮到 —— 把话说清楚：它不会再自己重试了
+          if (attempt >= CONCURRENCY_MAX_ATTEMPTS) {
+            const base = err instanceof Error ? err.message : String(err)
+            throw new ApiError(
+              `${base}（已经自动排了 ${CONCURRENCY_MAX_ATTEMPTS} 次还是没轮到，不会再自动重试了 —— 过一会儿自己再发一次，或者点「重新生成」。）`,
+              'http',
+              429,
+              'concurrency_limit',
+              err instanceof ApiError ? err.detail : undefined,
+            )
+          }
+
           // 把「正在等」摆到界面上 —— 别让人对着一个空转圈发呆
           patchMessage(convId, asstId, {
             status: 'streaming',
             retry: {
               attempt: attempt + 1,
+              max: CONCURRENCY_MAX_ATTEMPTS,
               at: Date.now() + CONCURRENCY_WAIT_MS,
               message: err instanceof Error ? err.message : String(err),
             },
