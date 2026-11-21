@@ -2,52 +2,49 @@ import { useApp } from '@/state/store'
 import { MODEL } from '@/config'
 
 /**
- * 空会话的首屏 —— 两种风格各一套。
+ * 空会话的首屏。
  *
- *   网页对话：一句按时间问候的大字，输入框和起手式在它正下方（布局在 App 里居中）
- *   终端    ：一个带边框的欢迎框，像命令行工具启动时打印的那一屏
+ * 只有品牌字 —— 不放介绍文案、不放建议问题、不放连接指南。
+ * 这个应用是给一个模型专用的，用不着教用户怎么用。
  *
- * 动画全在 CSS 里；不喜欢动效的人直接看到最终样子。
+ * 品牌字是「写」出来的：一个字一个字显影，写完留一道金线，
+ * 光标闪几下就收起来。动画全在 CSS 里 —— 关掉动效偏好的人
+ * 直接看到写完的样子，不看过程。
  */
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 5) return '夜深了'
-  if (h < 11) return '早上好'
-  if (h < 13) return '中午好'
-  if (h < 18) return '下午好'
-  return '晚上好'
-}
+/** 标题 —— 一笔一笔写出来的就是这几个字 */
+const TITLE = 'Free Chat'
 
-function WebWelcome(): React.ReactElement {
+/** 每个字之间隔多久（毫秒）—— 写字的速度 */
+const CHAR_DELAY_MS = 62
+
+/** 第一个字什么时候开始写（毫秒） */
+const START_DELAY_MS = 300
+
+function DefaultWelcome(): React.ReactElement {
   return (
     <div className="welcome">
-      <h1 className="welcome__title">{greeting()}，想聊点什么？</h1>
+      <div className="welcome__inner">
+        <h1 className="welcome__title">
+          {TITLE.split('').map((ch, i) => (
+            <span
+              key={`${ch}-${i}`}
+              className="welcome__char"
+              /* 每个字错开一点点 —— 延迟直接算好写进 style，省一层自定义属性 */
+              style={{ animationDelay: `${START_DELAY_MS + i * CHAR_DELAY_MS}ms` }}
+            >
+              {ch}
+            </span>
+          ))}
+          <i className="welcome__caret" aria-hidden="true" />
+        </h1>
+        <span className="welcome__rule" aria-hidden="true" />
+      </div>
     </div>
   )
 }
 
-/** 新会话时挂在输入框下面的几个起手式 —— 点一下填进输入框，不直接发 */
-export const STARTERS: { label: string; text: string }[] = [
-  { label: '写点东西', text: '帮我写一段' },
-  { label: '学点知识', text: '用通俗的话给我讲讲' },
-  { label: '写代码', text: '帮我写一个脚本，' },
-  { label: '查最新消息', text: '搜一下最近关于' },
-  { label: '出主意', text: '我在纠结' },
-]
-
-export function Starters({ onPick }: { onPick: (text: string) => void }): React.ReactElement {
-  return (
-    <div className="starters">
-      {STARTERS.map((s) => (
-        <button key={s.label} type="button" className="starters__chip" onClick={() => onPick(s.text)}>
-          {s.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
+/** 命令行风格的首屏：一个带边框的欢迎框，像命令行工具启动时打印的那一屏 */
 function TerminalWelcome(): React.ReactElement {
   return (
     <div className="term-welcome">
@@ -76,5 +73,5 @@ function TerminalWelcome(): React.ReactElement {
 
 export function EmptyState(): React.ReactElement {
   const ui = useApp((s) => s.settings.uiStyle)
-  return ui === 'terminal' ? <TerminalWelcome /> : <WebWelcome />
+  return ui === 'terminal' ? <TerminalWelcome /> : <DefaultWelcome />
 }

@@ -1159,19 +1159,17 @@ html[data-font-size='lg'] {
 /* ── 两种风格共用 ── */
 
 /* Markdown 切成了几段（代码块单独一段），段内的块之间也要有间距 */
-.prose-seg > * + * {
+html[data-ui='terminal'] .prose-seg > * + * {
   margin-top: 1em;
 }
-.prose-chat > .prose-seg:first-child > :is(h1, h2, h3, h4):first-child {
+html[data-ui='terminal'] .prose-chat > .prose-seg:first-child > :is(h1, h2, h3, h4):first-child {
   margin-top: 0;
 }
 
 /* 只在某一种风格出现的零件，默认都藏着 */
 .topbar__title,
 .composer__prompt,
-.composer__hint,
-.composer__note,
-.starters {
+.composer__hint {
   display: none;
 }
 .term-accent {
@@ -1185,12 +1183,12 @@ html[data-font-size='lg'] {
 }
 
 /* 流式光标贴在最后一行文字后面，而不是另起一行 */
-.caret:has(.prose-seg:last-child > :is(p, h1, h2, h3, h4, ul, ol, blockquote):last-child)::after {
+html[data-ui='terminal'] .caret:has(.prose-seg:last-child > :is(p, h1, h2, h3, h4, ul, ol, blockquote):last-child)::after {
   display: none;
 }
-.caret .prose-seg:last-child > :is(p, h1, h2, h3, h4):last-child::after,
-.caret .prose-seg:last-child > :is(ul, ol):last-child > li:last-child::after,
-.caret .prose-seg:last-child > blockquote:last-child > :last-child::after {
+html[data-ui='terminal'] .caret .prose-seg:last-child > :is(p, h1, h2, h3, h4):last-child::after,
+html[data-ui='terminal'] .caret .prose-seg:last-child > :is(ul, ol):last-child > li:last-child::after,
+html[data-ui='terminal'] .caret .prose-seg:last-child > blockquote:last-child > :last-child::after {
   content: '';
   display: inline-block;
   width: 2px;
@@ -1202,549 +1200,11 @@ html[data-font-size='lg'] {
 }
 
 /* 消息下面那排小按钮：不占太多地方 */
-.msg-actions .btn-icon {
+html[data-ui='terminal'] .msg-actions .btn-icon {
   width: 28px;
   height: 28px;
   padding: 0;
   border: 0;
-}
-
-/* ─────────────────────────── 网页对话 ─────────────────────────── */
-html[data-ui='web'] {
-  --color-canvas: #faf9f5;
-  --color-canvas-2: #f5f4ed;
-  --color-canvas-3: #f8f7f2;
-  --color-surface: #ffffff;
-  --color-surface-2: #f0eee6;
-  --color-line: #e5e2d8;
-  --color-line-soft: rgba(31, 30, 29, 0.08);
-  --color-ink: #141413;
-  --color-ink-2: #3d3d3a;
-  --color-muted: #73726c;
-  --color-faint: #a3a19a;
-  --color-paper-1: #faf9f5;
-  --color-paper-2: #f5f4ed;
-  --color-gold: #c96442;
-  --accent: #c96442;
-  --accent-hover: #b4553a;
-  --accent-ink: #ffffff;
-  --row-hover: #ece9e0;
-  --row-active: #e7e4da;
-  --user-bubble: #f0eee6;
-  --code-bg: #f3f1ea;
-  --code-ink: #a8432f;
-  --text-body: 16px;
-  --text-body--line-height: 1.75;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-}
-html.dark[data-ui='web'] {
-  --color-canvas: #262624;
-  --color-canvas-2: #1f1e1d;
-  --color-canvas-3: #2b2b29;
-  --color-surface: #30302e;
-  --color-surface-2: #353532;
-  --color-line: #3e3e3a;
-  --color-line-soft: rgba(255, 255, 255, 0.07);
-  --color-ink: #f5f4ef;
-  --color-ink-2: #dedcd3;
-  --color-muted: #a6a39a;
-  --color-faint: #75736c;
-  --color-paper-1: #262624;
-  --color-paper-2: #1f1e1d;
-  --color-gold: #d97757;
-  --accent: #d97757;
-  --accent-hover: #e08a6d;
-  --accent-ink: #ffffff;
-  --row-hover: #2b2a28;
-  --row-active: #31302d;
-  --user-bubble: #141413;
-  --code-bg: #1d1d1b;
-  --code-ink: #ec9b80;
-}
-html[data-ui='web'][data-font-size='sm'] {
-  --text-body: 15px;
-}
-html[data-ui='web'][data-font-size='lg'] {
-  --text-body: 18px;
-}
-
-html[data-ui='web'] .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-html[data-ui='web'] .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: var(--accent-ink);
-}
-html[data-ui='web'] :focus-visible {
-  outline-color: var(--accent);
-}
-
-/* 侧栏：比正文区暗半度的纸色，没有分隔线 */
-html[data-ui='web'] .sidebar {
-  background: var(--color-canvas-2);
-  border-color: var(--color-line);
-}
-html[data-ui='web'] .sidebar__head {
-  border-bottom: 0;
-  padding: 14px 10px 6px;
-}
-html[data-ui='web'] .sidebar__brand {
-  margin-bottom: 14px;
-  padding-left: 6px;
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-html[data-ui='web'] .sidebar__new {
-  justify-content: flex-start;
-  gap: 10px;
-  height: 38px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-ink);
-  font-size: 14px;
-  font-weight: 500;
-}
-html[data-ui='web'] .sidebar__new:hover:not(:disabled) {
-  background: var(--row-hover);
-  color: var(--color-ink);
-}
-html[data-ui='web'] .sidebar__new-icon {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-}
-html[data-ui='web'] .sidebar__new-icon svg {
-  width: 13px;
-  height: 13px;
-}
-html[data-ui='web'] .sidebar-search {
-  margin-top: 6px;
-  height: 34px;
-  border-radius: 8px;
-  border-color: transparent;
-  background: transparent;
-  padding: 0 8px 0 11px;
-  gap: 12px;
-}
-html[data-ui='web'] .sidebar-search:hover,
-html[data-ui='web'] .sidebar-search:focus-within {
-  background: var(--row-hover);
-  border-color: transparent;
-}
-html[data-ui='web'] .sidebar-search input {
-  font-size: 14px;
-}
-html[data-ui='web'] .sidebar__group-label {
-  padding: 4px 8px 6px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--color-muted);
-}
-html[data-ui='web'] .sidebar__time {
-  display: none;
-}
-/* 整行（标题 + 「…」按钮）一起高亮 */
-html[data-ui='web'] .sidebar__item {
-  border-radius: 8px;
-  padding-right: 2px;
-  transition: background-color 0.15s;
-}
-html[data-ui='web'] .sidebar__item:hover {
-  background: var(--row-hover);
-}
-html[data-ui='web'] .sidebar__item:has(.is-active) {
-  background: var(--row-active);
-}
-html[data-ui='web'] .sidebar__row,
-html[data-ui='web'] .sidebar__row:hover,
-html[data-ui='web'] .sidebar__row.is-active {
-  background: transparent;
-}
-html[data-ui='web'] .sidebar__row {
-  padding: 7px 8px;
-  font-size: 13.5px;
-  color: var(--color-ink-2);
-}
-html[data-ui='web'] .sidebar__row.is-active {
-  color: var(--color-ink);
-}
-html[data-ui='web'] .sidebar__item .btn-icon:hover:not(:disabled) {
-  background: transparent;
-  border-color: transparent;
-}
-html[data-ui='web'] .sidebar__foot {
-  border-top: 0;
-  padding: 8px 10px 10px;
-}
-
-/* 顶栏：左边会话名，新会话时空着 */
-html[data-ui='web'] .topbar {
-  height: 52px;
-}
-html[data-ui='web'] .topbar__title {
-  display: block;
-  padding-left: 6px;
-  font-size: 14px;
-  color: var(--color-ink-2);
-}
-html[data-ui='web'] .topbar__prefix {
-  display: none;
-}
-html[data-ui='web'] .is-empty .topbar__title {
-  visibility: hidden;
-}
-
-/* 消息流 */
-html[data-ui='web'] .msg-list {
-  gap: 22px;
-  padding-bottom: 8px;
-}
-html[data-ui='web'] .msg--user {
-  position: relative;
-  gap: 0;
-}
-html[data-ui='web'] .msg-user__bubble {
-  max-width: min(80%, 640px);
-  border: 0;
-  border-radius: 18px;
-  background: var(--user-bubble);
-  color: var(--color-ink);
-  padding: 10px 16px;
-  font-size: var(--text-body);
-  line-height: 1.65;
-}
-/* 用户消息的按钮浮在气泡下方，不把下一条推开 */
-html[data-ui='web'] .msg--user .msg-actions {
-  position: absolute;
-  top: 100%;
-  right: 4px;
-  z-index: 1;
-}
-html[data-ui='web'] .msg--assistant .msg-actions {
-  margin-top: 6px;
-  margin-left: -6px;
-}
-html[data-ui='web'] .msg-actions .btn-icon {
-  color: var(--color-muted);
-  border-radius: 6px;
-}
-
-/* 回答正文 */
-html[data-ui='web'] .prose-chat {
-  font-size: var(--text-body);
-  line-height: var(--text-body--line-height);
-  color: var(--color-ink);
-}
-html[data-ui='web'] .prose-chat :is(h1, h2, h3, h4) {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.35;
-  margin-top: 1.5em;
-  text-decoration: none;
-}
-html[data-ui='web'] .prose-chat h1 {
-  font-size: 1.4em;
-}
-html[data-ui='web'] .prose-chat h2 {
-  font-size: 1.22em;
-}
-html[data-ui='web'] .prose-chat h3 {
-  font-size: 1.08em;
-}
-html[data-ui='web'] .prose-chat strong {
-  font-weight: 600;
-}
-html[data-ui='web'] .prose-chat :is(ul, ol) {
-  padding-left: 1.5em;
-}
-html[data-ui='web'] .prose-chat li + li,
-html[data-ui='web'] .prose-chat li > :is(ul, ol) {
-  margin-top: 0.4em;
-}
-html[data-ui='web'] .prose-chat li::marker {
-  color: var(--color-muted);
-}
-html[data-ui='web'] .prose-chat a {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-color: var(--color-faint);
-  text-underline-offset: 3px;
-}
-html[data-ui='web'] .prose-chat a:hover {
-  text-decoration-color: var(--color-ink);
-}
-html[data-ui='web'] .prose-chat code {
-  font-size: 0.875em;
-  padding: 0.12em 0.38em;
-  border: 1px solid var(--color-line);
-  border-radius: 5px;
-  background: var(--code-bg);
-  color: var(--code-ink);
-}
-html[data-ui='web'] .prose-chat pre code {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 13.5px;
-}
-html[data-ui='web'] .prose-chat blockquote {
-  border-left: 3px solid var(--color-line);
-  padding: 2px 0 2px 14px;
-  color: var(--color-ink-2);
-}
-html[data-ui='web'] .prose-chat table {
-  font-size: 0.94em;
-  border-collapse: collapse;
-}
-html[data-ui='web'] .prose-chat :is(th, td) {
-  border: 0;
-  border-bottom: 1px solid var(--color-line);
-  padding: 8px 16px;
-  text-align: left;
-}
-html[data-ui='web'] .prose-chat :is(th, td):first-child {
-  padding-left: 2px;
-}
-html[data-ui='web'] .prose-chat th {
-  background: transparent;
-  font-weight: 600;
-  border-bottom-color: var(--color-faint);
-}
-html[data-ui='web'] .prose-chat hr {
-  margin: 1.8em 0;
-  border-color: var(--color-line);
-}
-html[data-ui='web'] {
-  --caret-color: var(--accent);
-}
-html[data-ui='web'] .caret::after {
-  background: var(--accent);
-}
-
-/* 代码块：一块圆角的浅底，语言名和复制按钮在顶上一行 */
-html[data-ui='web'] .code-block {
-  border: 1px solid var(--color-line);
-  border-radius: 10px;
-  background: var(--code-bg);
-}
-html[data-ui='web'] .code-block__head {
-  border-bottom: 0;
-  padding: 6px 6px 0 14px;
-  background: transparent;
-}
-html[data-ui='web'] .code-block__lang {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--color-muted);
-}
-html[data-ui='web'] .code-block__head .btn-icon {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-}
-html[data-ui='web'] .code-block__pre {
-  padding: 4px 16px 14px;
-  font-size: 13.5px;
-  line-height: 1.6;
-}
-
-/* 思考：一行可展开的灰字，正文用左边一条细线托着 */
-html[data-ui='web'] .reasoning {
-  border: 0;
-  background: transparent;
-}
-html[data-ui='web'] .reasoning__head {
-  width: auto;
-  padding: 4px 0;
-  font-size: 13.5px;
-}
-html[data-ui='web'] .reasoning__scroll {
-  border-left: 2px solid var(--color-line);
-  margin-left: 6px;
-  padding-left: 14px;
-  font-size: 13.5px;
-  line-height: 1.7;
-}
-html[data-ui='web'] .reasoning__dot {
-  background: var(--accent);
-}
-
-/* 工具调用：白底细边的一行 */
-html[data-ui='web'] .tool-card {
-  border-color: var(--color-line);
-  border-radius: 10px;
-  background: var(--color-surface);
-}
-html.dark[data-ui='web'] .tool-card {
-  background: var(--color-canvas-3);
-}
-html[data-ui='web'] .tool-card__head {
-  padding: 8px 12px;
-  font-size: 13px;
-  border-radius: 10px;
-}
-
-/* 输入框：大圆角白卡 + 很淡的影子 */
-html[data-ui='web'] .composer {
-  border-top: 0;
-  background: transparent;
-  padding-top: 4px;
-}
-html[data-ui='web'] .composer__box {
-  border: 1px solid var(--color-line);
-  border-radius: 20px;
-  background: var(--color-surface);
-  box-shadow: 0 4px 20px rgba(20, 20, 19, 0.045);
-  padding: 6px 6px 0;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
-}
-html[data-ui='web'] .composer__box:focus-within {
-  border-color: #d6d3c8;
-  box-shadow: 0 4px 24px rgba(20, 20, 19, 0.07);
-}
-html.dark[data-ui='web'] .composer__box {
-  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.22);
-}
-html.dark[data-ui='web'] .composer__box:focus-within {
-  border-color: #55554f;
-}
-html[data-ui='web'] .composer textarea {
-  padding: 8px 10px;
-  font-size: var(--text-body);
-  line-height: 1.6;
-}
-html[data-ui='web'] .composer__bar {
-  padding: 4px 2px 8px;
-}
-html[data-ui='web'] .composer__tools .btn-icon,
-html[data-ui='web'] .composer__tools .tag {
-  height: 32px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-ink-2);
-}
-html[data-ui='web'] .composer__tools .btn-icon {
-  width: 32px;
-  padding: 0;
-}
-html[data-ui='web'] .composer__tools .tag {
-  padding: 0 10px;
-  gap: 6px;
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-html[data-ui='web'] .composer__tools .tag[aria-pressed='false'] {
-  color: var(--color-faint);
-}
-html[data-ui='web'] .composer__tools :is(.btn-icon, .tag):hover {
-  background: var(--row-hover);
-  color: var(--color-ink);
-}
-html[data-ui='web'] .composer__send {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 8px;
-}
-html[data-ui='web'] .composer__send:disabled {
-  opacity: 0.5;
-}
-html[data-ui='web'] .composer__note {
-  display: block;
-  margin-top: 8px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-faint);
-}
-html[data-ui='web'] .is-empty .composer__note {
-  display: none;
-}
-
-/* 新会话：问候 + 输入框 + 起手式一起居中；聊起来以后输入框回到底部 */
-html[data-ui='web'] .is-empty .chat-body {
-  flex: 0 0 auto;
-  margin-top: auto;
-}
-html[data-ui='web'] .is-empty .composer {
-  margin-bottom: auto;
-  padding-bottom: 16vh;
-}
-html[data-ui='web'] .welcome {
-  flex: none;
-  background: none;
-  padding: 0 1.5rem 28px;
-}
-html[data-ui='web'] .welcome__title {
-  font-family: var(--font-serif);
-  font-size: clamp(1.9rem, 3.6vw, 2.6rem);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-  color: var(--color-ink);
-  text-align: center;
-  animation: web-welcome-in 0.6s var(--ease-out-expo) both;
-}
-html[data-ui='web'] .starters {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
-  animation: web-welcome-in 0.6s 0.08s var(--ease-out-expo) both;
-}
-html[data-ui='web'] .starters__chip {
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-ink-2);
-  font-size: 13.5px;
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-html[data-ui='web'] .starters__chip:hover {
-  background: var(--row-hover);
-  color: var(--color-ink);
-}
-@keyframes web-welcome-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-@media (max-width: 640px) {
-  html[data-ui='web'] .is-empty .composer {
-    padding-bottom: 4vh;
-  }
-  html[data-ui='web'] .msg-user__bubble {
-    max-width: 88%;
-  }
-  html[data-ui='web'] .starters__chip:nth-child(n + 4) {
-    display: none;
-  }
 }
 
 /* ─────────────────────────── 终端 ─────────────────────────── */
@@ -1818,8 +1278,7 @@ html[data-ui='terminal'] :focus-visible {
   outline-offset: 1px;
 }
 /* 输入框自己有边框表示焦点，不再套一圈虚线 */
-html[data-ui='terminal'] :is(textarea, input):focus-visible,
-html[data-ui='web'] :is(textarea, input):focus-visible {
+html[data-ui='terminal'] :is(textarea, input):focus-visible {
   outline: none;
 }
 html[data-ui='terminal'] .btn {
@@ -2229,6 +1688,8 @@ html[data-ui='terminal'] .composer__box {
   background: transparent;
 }
 html[data-ui='terminal'] .composer__row {
+  display: flex;
+  align-items: flex-start;
   border: 1px solid var(--input-line);
   border-radius: 6px;
   padding: 6px 1ch;
@@ -2361,9 +1822,7 @@ html[data-ui='terminal'] .composer__send {
 
 @media (prefers-reduced-motion: reduce) {
   html[data-ui='terminal'] .msg-waiting::before,
-  html[data-ui='terminal'] .tool-card[data-status='running'] .tool-card__head::before,
-  html[data-ui='web'] .welcome__title,
-  html[data-ui='web'] .starters {
+  html[data-ui='terminal'] .tool-card[data-status='running'] .tool-card__head::before {
     animation: none;
   }
 }

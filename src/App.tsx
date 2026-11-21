@@ -7,7 +7,7 @@ import { loadDraft, saveDraft } from '@/lib/storage'
 import { Composer } from '@/ui/Composer'
 import { SettingsDialog } from '@/ui/SettingsDialog'
 import { useGlobalShortcuts } from '@/ui/shortcuts'
-import { EmptyState, Starters } from '@/ui/EmptyState'
+import { EmptyState } from '@/ui/EmptyState'
 import { MessageList } from '@/ui/MessageList'
 import { Sidebar } from '@/ui/Sidebar'
 import { Toast } from '@/ui/Toast'
@@ -205,7 +205,7 @@ export function App(): React.ReactElement {
 
           <button
             type="button"
-            className="btn btn-ghost btn-icon"
+            className="btn btn-ghost btn-icon hidden lg:inline-flex"
             onClick={onNewChat}
             aria-label="新对话"
             title="新对话"
@@ -230,20 +230,6 @@ export function App(): React.ReactElement {
 
         <Composer
           value={input}
-          starters={
-            messages.length === 0 && settings.uiStyle !== 'terminal' ? (
-              <Starters
-                onPick={(t) => {
-                  setInput(t)
-                  requestAnimationFrame(() => {
-                    const el = document.getElementById('composer-input') as HTMLTextAreaElement | null
-                    el?.focus()
-                    el?.setSelectionRange(t.length, t.length)
-                  })
-                }}
-              />
-            ) : null
-          }
           onChange={setInput}
           onSend={onSend}
           onStop={stopGeneration}

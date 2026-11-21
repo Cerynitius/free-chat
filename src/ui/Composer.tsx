@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Paperclip, PencilSimple, Stop, Wrench, X } from '@phosphor-icons/react'
+import { Paperclip, PaperPlaneRight, PencilSimple, Stop, Wrench, X } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { EffortPicker } from './EffortPicker'
 import { formatSize, type Attachment } from '@/lib/attachments'
@@ -26,8 +26,6 @@ interface Props {
   onToolsChange: (v: boolean) => void
   /** Enter 发送，还是 Ctrl/⌘+Enter 发送 */
   sendKey: SendKey
-  /** 新会话时挂在输入框下面的起手式（网页风格） */
-  starters?: React.ReactNode
 }
 
 export function Composer({
@@ -46,7 +44,6 @@ export function Composer({
   toolsEnabled,
   onToolsChange,
   sendKey,
-  starters,
 }: Props): React.ReactElement {
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -107,7 +104,7 @@ export function Composer({
             </div>
           )}
 
-          <div className="composer__row flex items-start">
+          <div className="composer__row">
           <span className="composer__prompt" aria-hidden="true">&gt;</span>
           <textarea
             ref={ref}
@@ -125,7 +122,11 @@ export function Composer({
                   ? '改完直接发 —— 这一轮会被替换'
                   : terminal
                     ? '试试「解释一下这段代码」'
-                    : '有什么可以帮你？'
+                    : coarse
+                      ? '说点什么…'
+                      : sendKey === 'mod-enter'
+                        ? `说点什么…（${modKey}Enter 发送，Enter 换行）`
+                        : '说点什么…（Enter 发送，Shift+Enter 换行）'
             }
             className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.7] text-ink outline-none placeholder:text-faint"
             aria-label="输入消息"
@@ -225,14 +226,11 @@ export function Composer({
                 aria-label={editing ? '改写并发送' : '发送'}
                 title={editing ? '改写并发送' : '发送'}
               >
-                <ArrowUp size={16} weight="bold" />
+                <PaperPlaneRight size={16} weight="fill" />
               </button>
             )}
           </div>
         </div>
-        {/* 网页风格才显示：输入框下面一行小字 */}
-        {starters}
-        <div className="composer__note">Free Chat 也会出错，重要的事请自己核对。</div>
       </div>
     </div>
   )

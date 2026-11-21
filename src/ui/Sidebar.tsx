@@ -347,8 +347,8 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
               type="button"
               className="btn btn-ghost btn-icon"
               onClick={() => updateSettings({ uiStyle: settings.uiStyle === 'web' ? 'terminal' : 'web' })}
-              aria-label={settings.uiStyle === 'web' ? '切换到终端风格' : '切换到网页对话风格'}
-              title={settings.uiStyle === 'web' ? '切换到终端风格' : '切换到网页对话风格'}
+              aria-label={settings.uiStyle === 'web' ? '切换到命令行风格' : '切换回默认风格'}
+              title={settings.uiStyle === 'web' ? '切换到命令行风格' : '切换回默认风格'}
             >
               {settings.uiStyle === 'web' ? <TerminalWindow size={16} weight="bold" /> : <ChatCircleText size={16} weight="bold" />}
             </button>

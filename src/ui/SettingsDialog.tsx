@@ -187,14 +187,14 @@ export function SettingsDialog(): React.ReactElement | null {
         <div className="dialog__body">
           <section>
             <h3 className="settings-h">外观</h3>
-            <Row title="界面风格" hint={settings.uiStyle === 'web' ? '暖色纸面，居中对话' : '等宽字体，命令行式排版'}>
+            <Row title="界面风格" hint={settings.uiStyle === 'web' ? '原来的样子' : '仿 Claude Code 的命令行界面'}>
               <Segmented<UiStyle>
                 label="界面风格"
                 value={settings.uiStyle}
                 onChange={(uiStyle) => updateSettings({ uiStyle })}
                 options={[
-                  { value: 'web', label: '网页对话' },
-                  { value: 'terminal', label: '终端' },
+                  { value: 'web', label: '默认' },
+                  { value: 'terminal', label: '命令行' },
                 ]}
               />
             </Row>
