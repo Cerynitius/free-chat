@@ -54,9 +54,15 @@ export function Composer({
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`
-  }, [value])
+    const fit = (): void => {
+      el.style.height = 'auto'
+      el.style.height = `${Math.min(el.scrollHeight, 220)}px`
+    }
+    fit()
+    // 换了界面风格，行高和内边距跟着变 —— <html data-ui> 是 App 在这之后才改的，下一帧再量一次
+    const raf = requestAnimationFrame(fit)
+    return () => cancelAnimationFrame(raf)
+  }, [value, terminal])
 
   // 进编辑模式 ⇒ 光标直接落到输入框里，接着就能改
   useEffect(() => {
