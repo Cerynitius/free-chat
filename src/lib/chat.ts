@@ -7,6 +7,7 @@ import {
   describeConnectionError,
   describeHttpError,
   extractCode,
+  friendlyStreamError,
 } from './api'
 import { readSSE } from './sse'
 
@@ -71,7 +72,8 @@ export async function runChat(p: ChatParams): Promise<ChatOutcome> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new ApiError(describeHttpError(res.status, text), 'http', res.status, extractCode(text))
+    const { message, detail } = describeHttpError(res.status, text)
+    throw new ApiError(message, 'http', res.status, extractCode(text), detail)
   }
 
   let finishReason: string | null = null
@@ -87,6 +89,15 @@ export async function runChat(p: ChatParams): Promise<ChatOutcome> {
       chunk = JSON.parse(frame) as ChatChunk
     } catch {
       continue // 坏帧跳过，不打断整条流
+    }
+    // 有些错误是**流里**来的（200 的正文里塞一句 error）——
+    // 不认它的话，流会静悄悄地断掉，界面上只剩一句「连接中断」。
+    const inline = (chunk as { type?: string; error?: { type?: string; code?: string; message?: string } })
+      .error
+    if (inline || (chunk as { type?: string }).type === 'error') {
+      const info = inline ?? { message: '上游在流里报了一个错' }
+      const { message, detail } = friendlyStreamError(info)
+      throw new ApiError(message, 'http', 429, info.code, detail)
     }
     const choice = chunk.choices?.[0]
     if (!choice) continue

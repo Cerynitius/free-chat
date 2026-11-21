@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowClockwise, Check, Copy, PencilSimple, WarningCircle } from '@phosphor-icons/react'
-import type { Message, TruncationKind } from '@/state/types'
+import type { Message, RetryNotice, TruncationKind } from '@/state/types'
 import { copyText } from '@/lib/clipboard'
 import { markdownToText } from '@/lib/plain'
 import { CopyMenu } from './CopyMenu'
@@ -31,6 +31,41 @@ const TRUNCATION_NOTE: Record<TruncationKind, { title: string; detail: string }>
   },
 }
 
+/**
+ * 排队等重试的提示。
+ *
+ * 上游同时只接一个请求，被挤掉不是失败 —— 说清楚「还要等多久、第几次」，
+ * 比让人盯着一句报错猜强。
+ */
+function QueueNotice({ notice }: { notice: RetryNotice }): React.ReactElement {
+  const [left, setLeft] = useState(() =>
+    Math.max(0, Math.round((notice.at - Date.now()) / 1000)),
+  )
+
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      const s = Math.max(0, Math.round((notice.at - Date.now()) / 1000))
+      setLeft(s)
+      if (s === 0) window.clearInterval(t)
+    }, 500)
+    return () => window.clearInterval(t)
+  }, [notice.at])
+
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-yellow-soft bg-yellow-soft/40 px-3 py-2.5 text-[13px] text-yellow-ink">
+      <WarningCircle size={16} weight="bold" className="mt-0.5 shrink-0" />
+      <div>
+        <div className="font-medium">{notice.message}</div>
+        <div className="mt-1 opacity-90">
+          {left > 0
+            ? `${left} 秒后自动重试（第 ${notice.attempt} 次）`
+            : `马上重试（第 ${notice.attempt} 次）`}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function MessageItem({
   message,
   streaming,
@@ -49,7 +84,7 @@ export function MessageItem({
   if (message.role === 'user') {
     return (
       <div className="group flex flex-col items-end gap-1.5">
-        <div className="max-w-[85%] rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-[15px] leading-[1.6] text-ink-2 whitespace-pre-wrap sm:max-w-[75%]">
+        <div className="max-w-[85%] rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-[15px] leading-[1.7] text-ink-2 whitespace-pre-wrap sm:max-w-[75%]">
           {message.content}
         </div>
 
@@ -97,11 +132,19 @@ export function MessageItem({
       {message.status === 'error' ? (
         <div className="flex items-start gap-2 rounded-md border border-red-soft bg-red-soft/40 px-3 py-2.5 text-[13px] text-red-ink">
           <WarningCircle size={16} weight="bold" className="mt-0.5 shrink-0" />
-          <div>
+          <div className="min-w-0">
             <div className="font-medium">请求失败</div>
             <div className="mt-1 opacity-90">{message.error?.message ?? '未知错误'}</div>
+            {/* 上游原话 —— 人话看不懂的时候，翻这句 */}
+            {message.error?.detail && (
+              <div className="mt-1 break-words font-mono text-[11px] opacity-70">
+                {message.error.detail}
+              </div>
+            )}
           </div>
         </div>
+      ) : message.retry ? (
+        <QueueNotice notice={message.retry} />
       ) : empty && streaming ? (
         <div className="flex items-center gap-2 text-[13px] text-muted">
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-muted" />

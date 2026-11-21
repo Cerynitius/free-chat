@@ -11,6 +11,7 @@ interface Props {
 
 export function MessageList({ conversation, onEdit }: Props): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const atBottom = useApp((s) => s.atBottom)
   const setAtBottom = useApp((s) => s.setAtBottom)
@@ -53,6 +54,40 @@ export function MessageList({ conversation, onEdit }: Props): React.ReactElement
     if (!el || !followRef.current) return
     el.scrollTop = el.scrollHeight
   }, [last?.content, last?.reasoning])
+
+  /**
+   * 内容高度变了 ⇒ 再贴一次底。
+   *
+   * 光靠「文本变了就滚一次」是不够的：思考面板展开收起、字体加载完、
+   * 公式重新排版、图片加载 —— 这些都会在我们算完 scrollHeight **之后**
+   * 又把内容撑高，视窗就停在半路上了（看着像「跟不上」）。
+   * 盯着内容本身的高度，才是真的贴着最后一行。
+   */
+  useEffect(() => {
+    const el = scrollRef.current
+    const content = contentRef.current
+    if (!el || !content) return
+    const ro = new ResizeObserver(() => {
+      if (!followRef.current) return
+      el.scrollTop = el.scrollHeight
+    })
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [])
+
+  /**
+   * 用户往上一滚就松手 —— 别跟人抢方向盘。
+   *
+   * 用 wheel 而不是 scroll 来判断：wheel 在滚动**之前**触发，
+   * 能在自动贴底把位置抢回去之前先停。松手之后内容继续长，
+   * 右下角那个「回到底部」带着未读数等在那里 —— 不抢，但不装作没发生。
+   */
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
+    if (e.deltaY >= 0) return
+    if (!followRef.current) return
+    followRef.current = false
+    setAtBottom(false)
+  }
 
   // 没跟着的时候，数一数又来了多少新内容
   useEffect(() => {
@@ -100,11 +135,12 @@ export function MessageList({ conversation, onEdit }: Props): React.ReactElement
       <div
         ref={scrollRef}
         onScroll={onScroll}
+        onWheel={onWheel}
         className="h-full overflow-y-auto overscroll-contain px-4 py-6 sm:px-6"
         /* 别让浏览器的滚动锚定跟我们抢位置 —— 那是自动跟随的头号对头 */
         style={{ overflowAnchor: 'none' }}
       >
-        <div className="mx-auto flex max-w-3xl flex-col gap-7">
+        <div ref={contentRef} className="mx-auto flex max-w-3xl flex-col gap-7">
           {messages.map((m) => (
             <MessageItem
               key={m.id}

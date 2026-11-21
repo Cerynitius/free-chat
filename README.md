@@ -31,7 +31,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 
 | Area | Capability |
 |---|---|
-| Streaming | Server-Sent Events with a blinking typing caret; output is buffered to about twelve flushes per second so long answers stay smooth |
+| Streaming | Server-Sent Events with a blinking typing caret; output is buffered to about twelve flushes per second so long answers stay smooth, and the view stays on the newest line until the reader scrolls up |
 | Reasoning | `reasoning_content` is rendered in its own panel, separate from the answer body: a fixed-height window in which the thinking scrolls up as it streams, its top edge softened instead of cut off, with a readout of how many seconds the model spent thinking |
 | Truncation | A cut-off answer says so: the message carries a notice telling a token-budget cut, a dropped connection, and an upstream filter apart |
 | Reasoning effort | Five levels: off, none, low, high, max. Picked from the chip at the bottom-left of the composer and sent as `reasoning_effort`; the default is `low` |
@@ -40,6 +40,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Code | Syntax highlighting for 14 languages, with a working copy button on every code block |
 | Math | KaTeX rendering for inline `$...$`, display `$$...$$`, and the LaTeX-native `\(...\)` and `\[...\]`; a formula KaTeX cannot parse falls back to monospaced source instead of a wall of red |
 | Actions | Regenerate an answer, stop generation mid-flight, copy an answer as plain text or as Markdown, and rewrite a question — editing it drops the whole round that followed and asks again |
+| Errors | Upstream failures are written for people: a full upstream says so and waits a minute before trying again, a wrong key says where the key belongs, a dropped connection says which hop broke — the upstream's own words stay underneath, in smaller type, for the times that is not enough |
 | History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; each one is named automatically, can be renamed and pinned, and offers rename / pin / delete from a right-click menu |
 | Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
 | Layout | Persistent sidebar on desktop that can be folded away, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
@@ -490,7 +491,7 @@ The four semantic tints each ship as a background and an ink pair, used for stat
 | Serif | `Newsreader`, `Lyon Text`, `Songti SC`, `Source Han Serif SC`, `Noto Serif SC`, `Georgia`, `Times New Roman`, serif |
 | Mono | `Geist Mono Variable`, `SF Mono`, `JetBrains Mono`, `Cascadia Code`, `Consolas`, `PingFang SC`, monospace |
 
-Latin text and numerals use Geist, CJK falls back to the system font, and both are geometric sans faces so the mixed setting stays coherent. The fonts are self-hosted, so there is no runtime CDN request. Body text is 15 pixels with a line height of 1.6.
+Latin text and numerals use Geist, CJK falls back to the system font, and both are geometric sans faces so the mixed setting stays coherent. The fonts are self-hosted, so there is no runtime CDN request. Body text is 15 pixels with a line height of 1.75.
 
 ### Shape, depth, and motion
 

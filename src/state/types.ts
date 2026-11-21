@@ -32,6 +32,21 @@ export type ReasoningEffort = 'off' | 'none' | 'low' | 'high' | 'max'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 
+/**
+ * 上游满了，正在排队重试 —— 这不是错误，是等待。
+ *
+ * 这个上游同时只接一个请求（服务商最大并行数 1），第二个会被 429 挡回来。
+ * 挡回来不等于失败，等一分钟再来一次就是 —— 一直等到用户喊停。
+ */
+export interface RetryNotice {
+  /** 第几次重试（1 = 第一次） */
+  attempt: number
+  /** 什么时候重试（时间戳） */
+  at: number
+  /** 一句话说明 —— 人话，不是上游原话 */
+  message: string
+}
+
 export interface Message {
   id: string
   role: Role
@@ -41,7 +56,9 @@ export interface Message {
   reasoning: string
   createdAt: number
   status: MessageStatus
-  error?: { message: string; code?: string }
+  error?: { message: string; code?: string; detail?: string }
+  /** 正在排队重试 —— 有这一栏就不是失败，是等着 */
+  retry?: RetryNotice
   /** 内容被截断时的说明 —— 没有这一栏，被截断的回答会被误当成正常完成 */
   truncated?: Truncation
   /** 思考耗时（ms）：从第一个思考 token 到第一个正文 token，面板上显示「已思考 3.2 秒」 */

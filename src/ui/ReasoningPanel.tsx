@@ -55,6 +55,7 @@ export function ReasoningPanel({
   const [overflowing, setOverflowing] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const textRef = useRef<HTMLDivElement | null>(null)
   /** 还跟着流走吗 */
   const followRef = useRef(true)
   const lastTopRef = useRef(0)
@@ -94,6 +95,24 @@ export function ReasoningPanel({
     if (!el || !open || !thinking || !followRef.current) return
     el.scrollTop = el.scrollHeight
   }, [open])
+
+  /**
+   * 文字变高 ⇒ 再贴一次底。
+   *
+   * 字体加载完、遮罩渐隐、面板高度过渡 —— 这些都会在算完 scrollHeight
+   * **之后**又把内容撑高，视窗就停在半路上了。盯着文字本身的高度才准。
+   */
+  useEffect(() => {
+    const el = scrollRef.current
+    const content = textRef.current
+    if (!el || !content) return
+    const ro = new ResizeObserver(() => {
+      if (!thinking || !followRef.current) return
+      el.scrollTop = el.scrollHeight
+    })
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [thinking])
 
   const onScroll = (): void => {
     const el = scrollRef.current
@@ -175,7 +194,7 @@ export function ReasoningPanel({
         data-fade={overflowing ? 'on' : 'off'}
       >
         <div ref={scrollRef} className="reasoning__scroll" onScroll={onScroll}>
-          <div className="reasoning__text">
+          <div ref={textRef} className="reasoning__text">
             {text}
             {thinking && <span className="reasoning__caret" aria-hidden="true" />}
           </div>

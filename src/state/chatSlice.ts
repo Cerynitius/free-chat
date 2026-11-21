@@ -1,6 +1,6 @@
 import type { AppGet, AppSet, ChatSlice, Conversation, Message, Role } from './types'
-import { ApiError } from '@/lib/api'
-import { describeTruncation, fetchTitle, runChat } from '@/lib/chat'
+import { ApiError, isConcurrencyError } from '@/lib/api'
+import { describeTruncation, fetchTitle, runChat, type ChatOutcome } from '@/lib/chat'
 import { cleanTitle, deriveTitle } from '@/lib/title'
 
 function uid(): string {
@@ -9,6 +9,32 @@ function uid(): string {
 
 /** 流式缓冲的刷新间隔（毫秒）—— 每个 delta 都 set() 会让整棵消息树重渲染。 */
 const FLUSH_MS = 80
+
+/**
+ * 上游同时只接一个请求（服务商最大并行数 1）。
+ * 第二个请求会被 429 挡回来 —— 那不是失败，是排队，等一分钟再来。
+ *
+ * 重试没有次数上限：上游的「满了」是队列，不是故障，等下去总能轮上。
+ * 用户想不想要这条队列，由「停止生成」说了算。
+ */
+const CONCURRENCY_WAIT_MS = 60_000
+
+/** 等一会儿（或者等到用户喊停） */
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const done = (): void => {
+      window.clearTimeout(timer)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = window.setTimeout(done, ms)
+    signal.addEventListener('abort', done, { once: true })
+  })
+}
 
 export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
   /** 正在跑的请求 —— 用来支持「停止生成」 */
@@ -134,27 +160,57 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       scheduleFlush(convId)
     }
 
+    /**
+     * 跑一次生成 —— 上游满了就在这里排队重试。
+     *
+     * 「满了」不是失败：同一个 IP 同时只跑一个请求，第二个被 429 挡回来。
+     * 等一分钟再来一次就行，别把这事变成一条红色报错。
+     */
+    const runWithQueue = async (): Promise<ChatOutcome> => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await runChat({
+            messages,
+            effort,
+            signal: ctrl.signal,
+            onReasoning: (chunk) => {
+              if (reasoningStartedAt === null) reasoningStartedAt = performance.now()
+              push(chunk, 'reasoning')
+            },
+            onContent: (chunk) => {
+              // 第一个正文 token ⇒ 思考结束，耗时当场定下来，
+              // 面板这时就能报「已思考 X 秒」，不用等整段生成跑完。
+              if (reasoningStartedAt !== null && reasoningEndedAt === null) {
+                reasoningEndedAt = performance.now()
+                patchMessage(convId, asstId, {
+                  reasoningMs: Math.round(reasoningEndedAt - reasoningStartedAt),
+                })
+              }
+              push(chunk, 'content')
+            },
+          })
+        } catch (err) {
+          if (!isConcurrencyError(err)) throw err
+
+          // 把「正在等」摆到界面上 —— 别让人对着一个空转圈发呆
+          patchMessage(convId, asstId, {
+            status: 'streaming',
+            retry: {
+              attempt: attempt + 1,
+              at: Date.now() + CONCURRENCY_WAIT_MS,
+              message: err instanceof Error ? err.message : String(err),
+            },
+          })
+          flush(convId, asstId)
+          await wait(CONCURRENCY_WAIT_MS, ctrl.signal)
+          if (ctrl.signal.aborted) throw err
+          patchMessage(convId, asstId, { retry: undefined })
+        }
+      }
+    }
+
     try {
-      const outcome = await runChat({
-        messages,
-        effort,
-        signal: ctrl.signal,
-        onReasoning: (chunk) => {
-          if (reasoningStartedAt === null) reasoningStartedAt = performance.now()
-          push(chunk, 'reasoning')
-        },
-        onContent: (chunk) => {
-          // 第一个正文 token ⇒ 思考结束，耗时当场定下来，
-          // 面板这时就能报「已思考 X 秒」，不用等整段生成跑完。
-          if (reasoningStartedAt !== null && reasoningEndedAt === null) {
-            reasoningEndedAt = performance.now()
-            patchMessage(convId, asstId, {
-              reasoningMs: Math.round(reasoningEndedAt - reasoningStartedAt),
-            })
-          }
-          push(chunk, 'content')
-        },
-      })
+      const outcome = await runWithQueue()
 
       // 收尾：把残余缓冲刷进 store，再定状态
       if (timer !== null) {
@@ -191,7 +247,11 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       const message = err instanceof Error ? err.message : String(err)
       patchMessage(convId, asstId, {
         status: aborted ? 'aborted' : 'error',
-        error: aborted ? undefined : { message },
+        // 排队提示到这儿就该收了 —— 不然「已停止」的消息上还挂着「即将重试」
+        retry: undefined,
+        error: aborted
+          ? undefined
+          : { message, detail: err instanceof ApiError ? err.detail : undefined },
         // 半路被打断也算想过：报出到这一刻为止的耗时
         reasoningMs:
           reasoningStartedAt !== null

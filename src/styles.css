@@ -58,7 +58,7 @@
 
   /* ── 正文 ─────────────────────────────────────────────── */
   --text-body: 15px;
-  --text-body--line-height: 1.6;
+  --text-body--line-height: 1.75;
 }
 
 /* ── 暗色：覆盖同一批变量（utilities 引用 var()，自动跟着变） ── */
@@ -98,7 +98,7 @@
     background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    line-height: 1.6;
+    line-height: 1.7;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overscroll-behavior-y: none;
@@ -224,13 +224,13 @@
 /* ── Markdown 排版 ─────────────────────────────────────────── */
 .prose-chat {
   font-size: var(--text-body);
-  line-height: 1.6;
+  line-height: var(--text-body--line-height);
   color: var(--color-ink);
   overflow-wrap: anywhere;
 }
 
 .prose-chat > * + * {
-  margin-top: 0.9em;
+  margin-top: 1em;
 }
 
 .prose-chat h1,
@@ -277,12 +277,12 @@
 }
 
 .prose-chat li + li {
-  margin-top: 0.35em;
+  margin-top: 0.5em;
 }
 
 .prose-chat li > ul,
 .prose-chat li > ol {
-  margin-top: 0.35em;
+  margin-top: 0.5em;
 }
 
 .prose-chat a {
@@ -566,7 +566,7 @@
   overflow-anchor: none; /* 别让浏览器的滚动锚定跟我们抢位置 */
   padding: 10px 12px;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--color-muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -89,7 +89,7 @@ export function Composer({
             placeholder={
               streaming ? '正在生成…' : editing ? '改完直接发 —— 这一轮会被替换' : '说点什么…（Enter 发送，Shift+Enter 换行）'
             }
-            className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.6] text-ink outline-none placeholder:text-faint"
+            className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.7] text-ink outline-none placeholder:text-faint"
             aria-label="输入消息"
           />
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
