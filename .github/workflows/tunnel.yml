@@ -11,9 +11,8 @@ name: Tunnel
 # 实测这个仓库的 schedule 一直没触发（2026-11-20，12:17Z 和 16:17Z 两个时点
 # 都没跑），所以 cron 只留作兜底 —— 万一哪天它醒了，还得能跟自续链共存而不打架。
 
+# Free Chat 不用这条隧道（入口在源站 nginx 的 /freechat 上），定时触发已关掉，只留手动。
 on:
-  schedule:
-    - cron: '17 */4 * * *'
   workflow_dispatch:
     inputs:
       takeover:

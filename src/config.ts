@@ -19,8 +19,16 @@ export const BASE_URL = 'https://182.92.245.176:1920'
  *
  * 本地开发默认指向 npm run proxy 起的那个，clone 下来直接就能跑。
  */
+/**
+ * 正式站点（ruixiuzhang.com/freechat）用的入口：源站 nginx 上的 /freechat 前缀。
+ * 那里补 CORS 头、在服务端带上 key、按来源 IP 限并发 1；/freechat/tools/* 是工具代理。
+ * 构建时设了 VITE_PROXY_URL 就用那个。
+ */
+const PUBLIC_PROXY_URL = 'https://182.92.245.176:1920/freechat'
+
 export const PROXY_URL = (
-  import.meta.env.VITE_PROXY_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:8787' : '')
+  import.meta.env.VITE_PROXY_URL ||
+  (import.meta.env.DEV ? 'http://127.0.0.1:8787' : PUBLIC_PROXY_URL)
 ).trim()
 
 /** API key。构建期注入（仓库里没有真值）；代理模式下由代理侧覆盖。 */

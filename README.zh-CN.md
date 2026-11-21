@@ -63,8 +63,8 @@
 想跑自己那份的话，克隆下来装完依赖就行。本地代理不用注册，也不用在任何地方开账号。
 
 ```bash
-git clone https://github.com/Cerynitius/free-chat.git
-cd free-chat
+git clone https://github.com/Cerynitius/freechat.git
+cd freechat
 npm install
 ```
 

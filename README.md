@@ -63,8 +63,8 @@ The published site already works. The proxy is hosted on a GitHub Actions runner
 To run your own copy instead, clone the repository and install the dependencies. The local proxy needs no registration and no account anywhere.
 
 ```bash
-git clone https://github.com/Cerynitius/free-chat.git
-cd free-chat
+git clone https://github.com/Cerynitius/freechat.git
+cd freechat
 npm install
 ```
 
