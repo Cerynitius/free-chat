@@ -77,10 +77,10 @@ export function Composer({
   }
 
   return (
-    <div className="composer border-t border-line bg-canvas px-3 pb-3 pt-2 sm:px-6 sm:pb-5">
+    <div className="border-t border-line bg-canvas px-3 pb-3 pt-2 sm:px-6 sm:pb-5">
       <div className="mx-auto max-w-3xl">
         <div
-          className={`composer__box rounded-lg border bg-surface transition-colors ${
+          className={`rounded-lg border bg-surface transition-colors ${
             focused ? 'border-ink' : 'border-line'
           }`}
         >
@@ -102,8 +102,6 @@ export function Composer({
             </div>
           )}
 
-          <div className="composer__row flex items-start">
-          <span className="composer__prompt" aria-hidden="true">&gt;</span>
           <textarea
             ref={ref}
             id="composer-input"
@@ -127,7 +125,6 @@ export function Composer({
             className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.7] text-ink outline-none placeholder:text-faint"
             aria-label="输入消息"
           />
-          </div>
 
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-3 pb-1">
@@ -152,7 +149,7 @@ export function Composer({
             </div>
           )}
 
-          <div className="composer__bar flex items-center justify-between gap-2 px-2 pb-2">
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <input
                 ref={fileRef}
@@ -207,25 +204,6 @@ export function Composer({
               </button>
             )}
           </div>
-        </div>
-        {/* 终端风格才显示：输入框下面那一行按键提示 */}
-        <div className="composer__hint">
-          {streaming ? (
-            <span>
-              <span className="term-ink">esc</span> 停止生成
-            </span>
-          ) : sendKey === 'mod-enter' ? (
-            <span>
-              <span className="term-ink">{modKey}⏎</span> 发送 · <span className="term-ink">⏎</span> 换行
-            </span>
-          ) : (
-            <span>
-              <span className="term-ink">⏎</span> 发送 · <span className="term-ink">⇧⏎</span> 换行
-            </span>
-          )}
-          <span className="ml-auto">
-            <span className="term-ink">/</span> 聚焦 · <span className="term-ink">{modKey}K</span> 搜索
-          </span>
         </div>
       </div>
     </div>

@@ -52,20 +52,20 @@ export function ToolCard({ record }: Props): React.ReactElement {
         : (record.summary ?? '跑完了')
 
   return (
-    <div className="tool-card rounded-md border border-line bg-surface-2" data-status={record.status}>
+    <div className="tool-card rounded-md border border-line bg-surface-2">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="tool-card__head flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-canvas-2"
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-canvas-2"
         aria-expanded={open}
       >
-        <span className="tool-card__icon shrink-0 text-muted">
+        <span className="shrink-0 text-muted">
           <ToolIcon name={record.name} />
         </span>
-        <span className="tool-card__label shrink-0 text-ink-2">{toolLabel(record.name)}</span>
-        <span className="tool-card__args min-w-0 flex-1 truncate text-muted">{args}</span>
+        <span className="shrink-0 text-ink-2">{toolLabel(record.name)}</span>
+        <span className="min-w-0 flex-1 truncate text-muted">{args}</span>
         <span
-          className={`tool-card__state shrink-0 ${
+          className={`shrink-0 ${
             record.status === 'error' ? 'text-red-ink' : 'text-faint'
           }`}
         >
@@ -74,7 +74,7 @@ export function ToolCard({ record }: Props): React.ReactElement {
       </button>
 
       {open && (
-        <div className="tool-card__detail border-t border-line px-2.5 py-2">
+        <div className="border-t border-line px-2.5 py-2">
           <div className="mb-1 text-[11px] text-faint">参数</div>
           <pre className="mb-3 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-ink-2">
             {record.args}

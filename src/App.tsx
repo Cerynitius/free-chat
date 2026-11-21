@@ -73,11 +73,6 @@ export function App(): React.ReactElement {
     document.documentElement.dataset.fontSize = settings.fontSize
   }, [settings.fontSize])
 
-  // 界面风格挂在 <html data-ui>：配色、字体、圆角全由 CSS 按它切换
-  useEffect(() => {
-    document.documentElement.dataset.ui = settings.uiStyle
-  }, [settings.uiStyle])
-
   // 换了会话 ⇒ 改写模式作废；输入框换成那个会话没发出去的草稿
   const convId = conversation?.id
   useEffect(() => {
@@ -176,13 +171,13 @@ export function App(): React.ReactElement {
     <div className="flex h-full overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className={`app-main flex min-w-0 flex-1 flex-col${messages.length === 0 ? ' is-empty' : ''}`}>
+      <main className="flex min-w-0 flex-1 flex-col">
         {/*
           顶栏：
             手机 —— 只有一个抽屉按钮（侧边栏是抽屉）
             桌面 —— 侧边栏收起按钮 + 新对话（侧边栏收起来时也得有地方开新会话）
         */}
-        <div className="topbar flex h-11 shrink-0 items-center gap-1 px-2 sm:px-3">
+        <div className="flex h-11 shrink-0 items-center gap-1 px-2 sm:px-3">
           <button
             type="button"
             className="btn btn-ghost btn-icon lg:hidden"
@@ -205,21 +200,16 @@ export function App(): React.ReactElement {
 
           <button
             type="button"
-            className="btn btn-ghost btn-icon"
+            className="btn btn-ghost btn-icon hidden lg:inline-flex"
             onClick={onNewChat}
             aria-label="新对话"
             title="新对话"
           >
             <Plus size={17} weight="bold" />
           </button>
-
-          {/* 终端风格才显示：像终端窗口的标题栏 */}
-          <div className="topbar__title min-w-0 flex-1 truncate">
-            free-chat <span className="term-dim">—</span> {conversation?.title || '新会话'}
-          </div>
         </div>
 
-        <div className="chat-body flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           {messages.length === 0 ? (
             <EmptyState />
           ) : (

@@ -166,16 +166,12 @@ export function ReasoningPanel({
     <div className="reasoning">
       <button
         type="button"
-        className="reasoning__head flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-muted transition-colors hover:text-ink"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-muted transition-colors hover:text-ink"
         onClick={toggle}
         aria-expanded={open}
       >
-        <span className="reasoning__caret-icon">
-          {open ? <CaretDown size={14} weight="bold" /> : <CaretRight size={14} weight="bold" />}
-        </span>
-        <span className="reasoning__icon">
-          <Brain size={15} weight="bold" />
-        </span>
+        {open ? <CaretDown size={14} weight="bold" /> : <CaretRight size={14} weight="bold" />}
+        <Brain size={15} weight="bold" />
         <span className="tabular-nums">
           {thinking ? (
             <>

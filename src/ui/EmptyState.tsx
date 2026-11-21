@@ -1,64 +1,42 @@
-import { useApp } from '@/state/store'
-import { MODEL } from '@/config'
-
 /**
- * 空会话的首屏 —— 两种风格各一套。
+ * 空会话的首屏。
  *
- *   网页对话：一句按时间问候的衬线大字，输入框就在它正下方（布局在 App 里居中）
- *   终端    ：一个带边框的欢迎框，像命令行工具启动时打印的那一屏
+ * 只有品牌字 —— 不放介绍文案、不放建议问题、不放连接指南。
+ * 这个应用是给一个模型专用的，用不着教用户怎么用。
  *
- * 动画全在 CSS 里；不喜欢动效的人直接看到最终样子。
+ * 品牌字是「写」出来的：一个字一个字显影，写完留一道金线，
+ * 光标闪几下就收起来。动画全在 CSS 里 —— 关掉动效偏好的人
+ * 直接看到写完的样子，不看过程。
  */
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 5) return '夜深了'
-  if (h < 11) return '早上好'
-  if (h < 13) return '中午好'
-  if (h < 18) return '下午好'
-  return '晚上好'
-}
+/** 标题 —— 一笔一笔写出来的就是这几个字 */
+const TITLE = 'Free Chat'
 
-function WebWelcome(): React.ReactElement {
+/** 每个字之间隔多久（毫秒）—— 写字的速度 */
+const CHAR_DELAY_MS = 62
+
+/** 第一个字什么时候开始写（毫秒） */
+const START_DELAY_MS = 300
+
+export function EmptyState(): React.ReactElement {
   return (
     <div className="welcome">
       <div className="welcome__inner">
-        <span className="welcome__mark" aria-hidden="true" />
-        <h1 className="welcome__title">{greeting()}，今天想聊点什么？</h1>
+        <h1 className="welcome__title">
+          {TITLE.split('').map((ch, i) => (
+            <span
+              key={`${ch}-${i}`}
+              className="welcome__char"
+              /* 每个字错开一点点 —— 延迟直接算好写进 style，省一层自定义属性 */
+              style={{ animationDelay: `${START_DELAY_MS + i * CHAR_DELAY_MS}ms` }}
+            >
+              {ch}
+            </span>
+          ))}
+          <i className="welcome__caret" aria-hidden="true" />
+        </h1>
+        <span className="welcome__rule" aria-hidden="true" />
       </div>
     </div>
   )
-}
-
-function TerminalWelcome(): React.ReactElement {
-  return (
-    <div className="term-welcome">
-      <div className="term-welcome__box">
-        <div className="term-welcome__title">
-          <span className="term-accent">✻</span> 欢迎使用 <strong>Free Chat</strong>
-        </div>
-        <div className="term-welcome__line">
-          模型 <span className="term-ink">{MODEL}</span> · 记录只存在这个浏览器里 · 无需注册
-        </div>
-        <div className="term-welcome__line term-dim">cwd: ruixiuzhang.com/freechat</div>
-      </div>
-      <div className="term-welcome__tips">
-        <div className="term-dim">试试：</div>
-        <div>
-          <span className="term-dim">›</span> 解释一段代码，或者帮你写个脚本
-        </div>
-        <div>
-          <span className="term-dim">›</span> 搜一下网上的最新消息（工具开着时会自己去查）
-        </div>
-        <div>
-          <span className="term-dim">›</span> 按 <span className="term-ink">/</span> 回到输入框，<span className="term-ink">Ctrl+K</span> 搜索会话
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export function EmptyState(): React.ReactElement {
-  const ui = useApp((s) => s.settings.uiStyle)
-  return ui === 'terminal' ? <TerminalWelcome /> : <WebWelcome />
 }

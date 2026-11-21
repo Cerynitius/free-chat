@@ -6,7 +6,7 @@ import { flushPending } from '@/state/persist'
 import { requestPersist, storageInfo, type StorageInfo } from '@/lib/db'
 import { backupFileName, download, formatBytes, makeBackup, parseBackup } from '@/lib/export'
 import { clearDrafts } from '@/lib/storage'
-import type { FontSize, SendKey, ThemeMode, UiStyle } from '@/state/types'
+import type { FontSize, SendKey, ThemeMode } from '@/state/types'
 import { SHORTCUTS, modKey } from './shortcuts'
 
 /** 自定义指令的长度上限 —— 它每一轮都会发给模型，太长就是在烧上下文 */
@@ -187,17 +187,6 @@ export function SettingsDialog(): React.ReactElement | null {
         <div className="dialog__body">
           <section>
             <h3 className="settings-h">外观</h3>
-            <Row title="界面风格" hint={settings.uiStyle === 'web' ? '暖色纸面，衬线正文' : '等宽字体，命令行式排版'}>
-              <Segmented<UiStyle>
-                label="界面风格"
-                value={settings.uiStyle}
-                onChange={(uiStyle) => updateSettings({ uiStyle })}
-                options={[
-                  { value: 'web', label: '网页对话' },
-                  { value: 'terminal', label: '终端' },
-                ]}
-              />
-            </Row>
             <Row title="主题">
               <Segmented<ThemeMode>
                 label="主题"

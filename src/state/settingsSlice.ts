@@ -3,7 +3,6 @@ import { DEFAULT_EFFORT } from '@/config'
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
-  uiStyle: 'web',
   effort: DEFAULT_EFFORT,
   tools: true,
   fontSize: 'md',

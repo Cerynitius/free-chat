@@ -48,8 +48,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Settings and data | The settings button at the bottom of the sidebar (`Ctrl+,`): theme, font size, send key, custom instructions; shows local storage usage, can request persistent storage, can clear every conversation |
 | Drafts | Unsent text is kept per conversation and survives a reload or a switch to another conversation |
 | Shortcuts | `Ctrl+K` search, `Ctrl+Shift+O` new chat, `Ctrl+Shift+S` fold the sidebar, `Ctrl+,` settings, `/` jump to the composer, `Esc` stop generating (`⌘` on macOS) |
-| Interface styles | Two: **web chat** (warm paper palette, serif replies, the composer centred on a new conversation) and **terminal** (monospace; `>` marks your turn, `⏺` the answer, a tool call reads `⏺ name(args)` with a `⎿ result` line); one button at the bottom of the sidebar switches, and so does the settings panel |
-| Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar; both interface styles come in light and dark |
+| Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
 | Layout | Persistent sidebar on desktop that can be folded away, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
 | Welcome | Every visit opens on a fresh conversation; the previous ones are one click away in the sidebar. The title is written out letter by letter on a pale paper wash, with a hairline gold rule underneath — readers who ask for less motion get the finished page instead |
 | Responsive | One layout that adapts from narrow phones to wide desktops |

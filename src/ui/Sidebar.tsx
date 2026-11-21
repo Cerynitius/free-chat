@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChatCircleText, DotsThree, GearSix, MagnifyingGlass, Moon, Plus, PushPin, Sun, TerminalWindow, X } from '@phosphor-icons/react'
+import { DotsThree, GearSix, MagnifyingGlass, Moon, Plus, PushPin, Sun, X } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { formatTime, groupOf, type DateGroup } from '@/lib/date'
 import { conversationToMarkdown, download, safeFileName } from '@/lib/export'
@@ -162,8 +162,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
             type="button"
             onClick={() => onSelect(c.id)}
             className={[
-              'sidebar__row flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-[13px] transition-colors',
-              c.id === activeId ? 'is-active' : '',
+              'flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-[13px] transition-colors',
               c.id === activeId
                 ? 'bg-surface-2 text-ink'
                 : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
@@ -208,7 +207,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
 
       <aside
         className={[
-          'sidebar fixed inset-y-0 left-0 z-[55] flex w-[280px] shrink-0 flex-col overflow-hidden',
+          'fixed inset-y-0 left-0 z-[55] flex w-[280px] shrink-0 flex-col overflow-hidden',
           'border-r border-line bg-canvas',
           'transition-transform duration-200 ease-[var(--ease-out-expo)]',
           'lg:static lg:z-auto lg:translate-x-0 lg:transition-[width,transform] lg:duration-200',
@@ -220,7 +219,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
         {/* 里面的内容宽度锁死 —— 侧边栏收起时是「宽度归零」，不是「内容挤扁」 */}
         <div className="flex h-full w-[280px] shrink-0 flex-col lg:w-[260px]">
           <div className="border-b border-line px-3 py-3">
-            <div className="sidebar__brand mb-3 px-1 font-serif text-[15px] tracking-[-0.01em] text-ink">Free Chat</div>
+            <div className="mb-3 px-1 font-serif text-[15px] tracking-[-0.01em] text-ink">Free Chat</div>
             <button type="button" className="btn btn-primary w-full" onClick={onNew}>
               <Plus size={15} weight="bold" />
               新对话
@@ -327,7 +326,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
             ))}
           </nav>
 
-          <div className="flex items-center gap-1 border-t border-line px-3 py-2">
+          <div className="flex items-center justify-between border-t border-line px-3 py-2">
             <button
               type="button"
               className="btn btn-ghost h-8 gap-1.5 px-2 text-[12.5px] text-muted hover:text-ink"
@@ -339,16 +338,6 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
             >
               <GearSix size={15} weight="bold" />
               设置与数据
-            </button>
-            <span className="ml-auto" />
-            <button
-              type="button"
-              className="btn btn-ghost btn-icon"
-              onClick={() => updateSettings({ uiStyle: settings.uiStyle === 'web' ? 'terminal' : 'web' })}
-              aria-label={settings.uiStyle === 'web' ? '切换到终端风格' : '切换到网页对话风格'}
-              title={settings.uiStyle === 'web' ? '切换到终端风格' : '切换到网页对话风格'}
-            >
-              {settings.uiStyle === 'web' ? <TerminalWindow size={16} weight="bold" /> : <ChatCircleText size={16} weight="bold" />}
             </button>
             <button
               type="button"
