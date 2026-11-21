@@ -44,7 +44,7 @@ export interface Message {
   error?: { message: string; code?: string }
   /** 内容被截断时的说明 —— 没有这一栏，被截断的回答会被误当成正常完成 */
   truncated?: Truncation
-  /** 思考耗时（ms），面板上显示「已思考 3.2s」 */
+  /** 思考耗时（ms）：从第一个思考 token 到第一个正文 token，面板上显示「已思考 3.2 秒」 */
   reasoningMs?: number
 }
 

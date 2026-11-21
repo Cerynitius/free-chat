@@ -103,8 +103,10 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     controller = ctrl
 
     const effort = get().settings.effort
-    const startedAt = performance.now()
+    /** 第一个思考 token 落地的时间 —— 思考从这里开始 */
     let reasoningStartedAt: number | null = null
+    /** 第一个正文 token 落地的时间 —— 思考到这里结束 */
+    let reasoningEndedAt: number | null = null
 
     const push = (chunk: string, field: 'content' | 'reasoning'): void => {
       const buf = buffers.get(asstId) ?? { content: '', reasoning: '' }
@@ -122,7 +124,17 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
           if (reasoningStartedAt === null) reasoningStartedAt = performance.now()
           push(chunk, 'reasoning')
         },
-        onContent: (chunk) => push(chunk, 'content'),
+        onContent: (chunk) => {
+          // 第一个正文 token ⇒ 思考结束，耗时当场定下来，
+          // 面板这时就能报「已思考 X 秒」，不用等整段生成跑完。
+          if (reasoningStartedAt !== null && reasoningEndedAt === null) {
+            reasoningEndedAt = performance.now()
+            patchMessage(convId, asstId, {
+              reasoningMs: Math.round(reasoningEndedAt - reasoningStartedAt),
+            })
+          }
+          push(chunk, 'content')
+        },
       })
 
       // 收尾：把残余缓冲刷进 store，再定状态
@@ -138,8 +150,11 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
 
       patchMessage(convId, asstId, {
         status: 'complete',
+        // 思考耗时：没等到正文 token（比如思考完就被截断）就取到流收尾那一刻
         reasoningMs:
-          reasoningStartedAt !== null ? Math.round(reasoningStartedAt - startedAt) : undefined,
+          reasoningStartedAt !== null
+            ? Math.round((reasoningEndedAt ?? performance.now()) - reasoningStartedAt)
+            : undefined,
         truncated,
       })
 
@@ -171,6 +186,11 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       patchMessage(convId, asstId, {
         status: aborted ? 'aborted' : 'error',
         error: aborted ? undefined : { message },
+        // 半路被打断也算想过：报出到这一刻为止的耗时
+        reasoningMs:
+          reasoningStartedAt !== null
+            ? Math.round((reasoningEndedAt ?? performance.now()) - reasoningStartedAt)
+            : undefined,
       })
     } finally {
       controller = null
