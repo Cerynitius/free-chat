@@ -40,6 +40,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Code | Syntax highlighting for 14 languages, with a working copy button on every code block |
 | Math | KaTeX rendering for inline `$...$`, display `$$...$$`, and the LaTeX-native `\(...\)` and `\[...\]`; a formula KaTeX cannot parse falls back to monospaced source instead of a wall of red |
 | Actions | Regenerate an answer, stop generation mid-flight, copy an answer as plain text or as Markdown, and rewrite a question — editing it drops the whole round that followed and asks again |
+| Tools | Four tools the model can reach for on its own: search the web, fetch a page, read an attachment, and read the text out of a picture. Every call shows up as a card in the answer, with its arguments and its result |
 | Errors | Upstream failures are written for people: a full upstream says so and waits a minute before trying again, up to five times, a wrong key says where the key belongs, a dropped connection says which hop broke — the upstream's own words stay underneath, in smaller type, for the times that is not enough |
 | History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; each one is named automatically, can be renamed and pinned, and offers rename / pin / delete from a right-click menu |
 | Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
@@ -47,7 +48,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Welcome | Every visit opens on a fresh conversation; the previous ones are one click away in the sidebar. The title is written out letter by letter on a pale paper wash, with a hairline gold rule underneath — readers who ask for less motion get the finished page instead |
 | Responsive | One layout that adapts from narrow phones to wide desktops |
 
-Deliberately out of scope: tool calling (the server does not support it), image input (the API has no vision capability), and multi-model switching (there is a single model).
+Deliberately out of scope: image input (the API has no vision capability — a picture is read through OCR instead), and multi-model switching (there is a single model).
 
 <a id="quickstart"></a>
 ## Quick Start
@@ -153,7 +154,7 @@ See [Deployment](#deployment) for the full procedure.
 | Termination | `finish_reason: "stop"`, or `"length"` when the token budget runs out. There is no `usage` field in any frame. |
 | Reasoning effort | Accepts `off`, `none`, `low`, `high`, and `max`. |
 | Sampling | Supports the `system` role, `temperature`, `top_p`, and `stop`. |
-| Tool calling | Not supported by the server. |
+| Tool calling | Supported, in the standard OpenAI shape: the model answers with `delta.tool_calls` (arguments streamed in pieces) and `finish_reason: "tool_calls"`, and it accepts the `role: "tool"` message that carries the result back. Measured, not assumed. |
 
 Because the server never reports token usage, the interface shows no usage counter at all. There is nothing to estimate and nothing to display.
 
@@ -170,6 +171,52 @@ The client does not hide a cut-off response. The message carries a notice that t
 | Output was truncated | The upstream hit `max_tokens`. Thinking and the answer share that one budget. |
 | Connection dropped | The stream ended without a termination marker, so the text below may be incomplete. |
 | Content was filtered | The upstream's own filter cut the response. |
+
+### Tools
+
+The model can reach for four tools on its own. It decides to, the client runs them, and the result goes back into the conversation. This is the standard OpenAI tool protocol, which the upstream speaks: it answers with `delta.tool_calls` (the arguments arrive in pieces) and `finish_reason: "tool_calls"`, and it accepts the `role: "tool"` message that carries the result back.
+
+| Tool | Where it runs | What it does |
+|---|---|---|
+| `web_search` | Server | Searches the web and returns titles, links and snippets. |
+| `web_fetch` | Server | Fetches a page and returns its text. |
+| `read_file` | Browser, then server | Reads an attachment. Text files are read in the browser and never leave the machine; PDF, Word, Excel and PowerPoint go through the document service. |
+| `ocr` | Server | Reads the text out of a picture. |
+
+A call shows up in the answer as a card: what was called, with which arguments, and what came back. Clicking it opens the raw request and the raw result. The server-side tools are served by the same proxy, under `/tools/`.
+
+The model only knows the names it was given — the attachments on a message are sent along with it, so it never has to stop and ask.
+
+#### The search backends
+
+Search needs a backend. There are three ways to provide one, tried in this order:
+
+| Backend | Set with | What it is |
+|---|---|---|
+| SearXNG | `SEARXNG_URL` | A self-hosted metasearch — the open-source standard, `github.com/searxng/searxng`. No registration anywhere, but you have to run it: `proxy/searxng/docker-compose.yml` is ready to go. |
+| Brave Search | `BRAVE_API_KEY` | The official API. 2000 queries a month for free. |
+| Tavily | `TAVILY_API_KEY` | The official API. 1000 queries a month for free, built for agents. |
+
+With none of them set, the proxy falls back to reading the Bing result page — no account and no key, but it is a fallback and not a promise. When every backend fails, the tool says so, and the model answers without it rather than making something up.
+
+#### The document service
+
+Reading a PDF, a Word document, an Excel sheet or a picture needs a parser, and the parsers need a real runtime — Cloudflare Workers and Vercel Edge cannot run them. They live in a small Python service next to the proxy, `proxy/doc_service.py`:
+
+- **Documents** are converted by [MarkItDown](https://github.com/microsoft/markitdown) (MIT): PDF, `.docx`, `.xlsx`, `.pptx` and the older `.xls`.
+- **Pictures** are read by [RapidOCR](https://github.com/RapidAI/RapidOCR), which is the PaddleOCR models in ONNX form: the same accuracy, four times faster on a CPU, a fifth of the memory, and no PaddlePaddle.
+- **Scanned PDFs** — pages that are pictures — are rasterised with pypdfium2 and then read by the OCR. Twenty pages at the most, and the rest is reported as not read.
+
+The service is optional. Without it everything else keeps working, and the two tools that need it answer that the service is not running.
+
+```bash
+pip install -r proxy/requirements-doc.txt
+npm run doc          # http://127.0.0.1:8788
+```
+
+The proxy reaches it at `DOC_URL`, which defaults to `http://127.0.0.1:8788`.
+
+The old `.doc` and `.ppt` formats — the binary ones from before 2007 — are not supported. The tool says so and asks for a `.docx` instead.
 
 ### Where the endpoint comes from
 
@@ -243,10 +290,11 @@ browser -> GitHub Pages -> Cloudflare Worker (fixed address) -> tunnel (trycloud
 
 1. installs `cloudflared`;
 2. starts the local proxy (`node proxy/server.mjs`) with the key read from the repository secret `VITE_API_KEY`;
-3. opens `cloudflared tunnel --url http://127.0.0.1:8787`;
-4. writes the resulting `https://<random>.trycloudflare.com` address into the `tunnel-url` file on the `runtime` branch;
-5. keeps the proxy and the tunnel alive until the job reaches its time limit;
-6. ninety minutes before that limit, calls the Actions API with the repository's own `GITHUB_TOKEN` to start the next round. `workflow_dispatch` is exempt from the rule that events triggered by `GITHUB_TOKEN` do not create a new run, so the repository's own token is enough.
+3. installs the document service and starts it — optional, and a failure there does not take the tunnel down;
+4. opens `cloudflared tunnel --url http://127.0.0.1:8787`;
+5. writes the resulting `https://<random>.trycloudflare.com` address into the `tunnel-url` file on the `runtime` branch;
+6. keeps the proxy and the tunnel alive until the job reaches its time limit;
+7. ninety minutes before that limit, calls the Actions API with the repository's own `GITHUB_TOKEN` to start the next round. `workflow_dispatch` is exempt from the rule that events triggered by `GITHUB_TOKEN` do not create a new run, so the repository's own token is enough.
 
 The runner refuses to fake a success: the workflow probes `/__ping` and fails the run unless the answer contains `"reachable": true`. A tunnel that came up but cannot reach the upstream never passes.
 
@@ -442,12 +490,13 @@ The deployment publishes static files only. It does not proxy the API, does not 
 <a id="settings"></a>
 ## Adjustable Options
 
-There is no configuration screen. Three options are adjustable at runtime, and all of them are reachable directly from the interface:
+There is no configuration screen. Four options are adjustable at runtime, and all of them are reachable directly from the interface:
 
 | Option | Default | Where | Description |
 |---|---|---|---|
 | Theme | `system` | Icon button at the bottom of the sidebar | `light`, `dark`, or follow the operating system. The button flips between light and dark. |
 | Reasoning effort | `low` | Chip at the bottom-left of the composer | One of `off`, `none`, `low`, `high`, `max`. Sent as `reasoning_effort` with every request. |
+| Tools | on | Chip at the bottom-left of the composer | Whether the model may call tools. Off means the request carries no `tools` and the model just talks. |
 | Sidebar fold | unfolded | Icon button at the top-left of the main area | Folds the desktop sidebar away. Remembered across visits. |
 
 Everything else is hardcoded in `src/config.ts` and is not editable in the interface: the origin URL, the proxy URL, the API key, the model id, `temperature`, `top_p`, `max_tokens`, and the system prompt. Changing any of them means editing that one file and rebuilding.
@@ -537,6 +586,7 @@ npm run typecheck  # TypeScript, no emit
 npm run build      # type check plus production build into dist/
 npm run preview    # serve the production build locally
 npm run check:readme  # verify that the two README files stay in sync
+npm run doc     # optional: the document service on 127.0.0.1:8788
 ```
 
 ### Layout
@@ -552,13 +602,19 @@ hippocrenes-model-chat/
 │   ├── config.ts         # origin, model, key, sampling parameters
 │   ├── styles.css        # design tokens and component classes
 │   ├── lib/              # api, chat, sse, markdown, hljs,
-│   │                     # storage, theme, date, clipboard
+│   │                     # storage, theme, date, clipboard, tools,
+│   │                     # attachments
 │   ├── state/            # store, three slices, types, persistence
 │   └── ui/               # presentational components
 ├── proxy/
 │   ├── handler.js        # common core: CORS, key injection, SSE passthrough
+│   ├── tools.js          # the tool endpoints: search, fetch, OCR, documents
 │   ├── server.mjs        # Node runner
 │   ├── tunnel.mjs        # local proxy plus a Cloudflare quick tunnel
+│   ├── doc_service.py    # optional document service: MarkItDown + RapidOCR
+│   ├── doc.mjs           # starts the document service with whatever python exists
+│   ├── requirements-doc.txt
+│   ├── searxng/          # a self-hosted SearXNG, for the search tool
 │   ├── deno.ts           # Deno Deploy entry point
 │   ├── api/[...path].js # Vercel entry point on the Node runtime
 │   ├── vercel/edge.ts    # Vercel Edge entry point
@@ -576,8 +632,8 @@ hippocrenes-model-chat/
 
 State is split into three slices over a common type module, so no slice has to import another one:
 
-- `settingsSlice` holds the two runtime options, the theme and the reasoning effort.
-- `chatSlice` holds conversations and the streaming lifecycle. Incoming SSE frames are buffered and flushed to the store twelve times per second, which keeps a long answer from re-rendering the tree on every token.
+- `settingsSlice` holds the three runtime options: the theme, the reasoning effort, and whether the tools are on.
+- `chatSlice` holds conversations and the streaming lifecycle. Incoming SSE frames are buffered and flushed to the store twelve times per second, which keeps a long answer from re-rendering the tree on every token. It also runs the tool loop: a tool call is executed, its result goes back to the model, and the answer continues in the same message.
 - `uiSlice` holds sidebar visibility, scroll position, unread counters, and toasts.
 
 Conversations and settings are persisted to `localStorage` under the key `hippocrenes.chat.v2`, debounced by 400 milliseconds, and capped at 50 conversations.

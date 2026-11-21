@@ -1,7 +1,16 @@
-import type { AppGet, AppSet, ChatSlice, Conversation, Message, Role } from './types'
+import type {
+  AppGet,
+  AppSet,
+  ChatSlice,
+  Conversation,
+  Message,
+  OutgoingMessage,
+  ToolCallRecord,
+} from './types'
 import { ApiError, isConcurrencyError } from '@/lib/api'
 import { describeTruncation, fetchTitle, runChat, type ChatOutcome } from '@/lib/chat'
 import { cleanTitle, deriveTitle } from '@/lib/title'
+import { runTool, toolDefinitions } from '@/lib/tools'
 
 function uid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -9,6 +18,60 @@ function uid(): string {
 
 /** 流式缓冲的刷新间隔（毫秒）—— 每个 delta 都 set() 会让整棵消息树重渲染。 */
 const FLUSH_MS = 80
+
+/**
+ * 一轮回答里最多让模型调几遍工具。
+ *
+ * 模型可以连着调工具（搜完再抓那个页面），但总得有个头 ——
+ * 不然它能一直转下去，用户只能干看着。
+ */
+const MAX_TOOL_ROUNDS = 5
+
+/**
+ * 把 store 里的消息翻成发给上游的格式。
+ *
+ * 工具那一轮在上游眼里是**两条**消息：一条带 tool_calls 的助手消息，
+ * 外加每调用一条 role:"tool" 的结果消息。少一条上游就会挑理。
+ *
+ * 用户消息如果带附件，要**把附件名捎给模型** —— 不然它不知道有哪些文件可读，
+ * 只能反过来问用户「那文件叫什么名字」。
+ */
+function toOutgoing(messages: Message[]): OutgoingMessage[] {
+  const out: OutgoingMessage[] = []
+  for (const m of messages) {
+    if (m.role === 'user') {
+      if (!m.content.trim()) continue
+      const names = m.attachments ?? []
+      const note = names.length
+        ? `\n\n（这条消息带了附件：${names.join('、')}。用 read_file 读文档、ocr 认图片，path 就填这些文件名。）`
+        : ''
+      out.push({ role: 'user', content: m.content + note })
+      continue
+    }
+    if (m.role !== 'assistant') continue
+
+    // 这一轮用过的工具 —— 跑完了、有结果的才算数
+    const calls = (m.tools ?? []).filter((t) => t.status !== 'running' && t.result !== undefined)
+    if (calls.length) {
+      out.push({
+        role: 'assistant',
+        content: m.content,
+        tool_calls: calls.map((c) => ({
+          id: c.id,
+          type: 'function' as const,
+          function: { name: c.name, arguments: c.args },
+        })),
+      })
+      for (const c of calls) {
+        out.push({ role: 'tool', tool_call_id: c.id, content: c.result ?? '' })
+      }
+      continue
+    }
+
+    if (m.content.trim()) out.push({ role: 'assistant', content: m.content })
+  }
+  return out
+}
 
 /**
  * 上游同时只接一个请求（服务商最大并行数 1）。
@@ -121,6 +184,10 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
   /**
    * 发起一次生成。history 是「已经存在的消息」，
    * 助手占位消息由本函数自己插入。
+   *
+   * 这一轮可能来回复数遍：模型要调工具 → 工具跑完 → 把结果喂回去 →
+   * 模型接着答。每跑一遍，模型的正文都续写进**同一条**助手消息 ——
+   * 界面上看起来就是一段连续的回答。
    */
   const generate = async (convId: string, history: Message[]): Promise<void> => {
     const now = Date.now()
@@ -141,18 +208,23 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       streamingId: asstId,
     }))
 
-    const messages = history
-      .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim())
-      .map((m) => ({ role: m.role as Role, content: m.content }))
+    /** 发给上游的消息 —— 每跑完一轮工具就往后接一段 */
+    let outgoing: OutgoingMessage[] = toOutgoing(history)
+    /** 这一遍请求里模型说出口的字 */
+    let turnContent = ''
+    /** 这一轮用过的工具（界面上画卡片，回给上游也要用） */
+    const toolRecords: ToolCallRecord[] = []
+    /** 工具还能不能用 —— 上游要是哪天不接 tools，就降级成纯聊天 */
+    let useTools = get().settings.tools
 
     const ctrl = new AbortController()
     controller = ctrl
 
     const effort = get().settings.effort
-    /** 第一个思考 token 落地的时间 —— 思考从这里开始 */
+    /** 思考从这一刻开始 */
     let reasoningStartedAt: number | null = null
-    /** 第一个正文 token 落地的时间 —— 思考到这里结束 */
-    let reasoningEndedAt: number | null = null
+    /** 累计的思考耗时 —— 工具那一轮会再想一次，累加起来 */
+    let reasoningMs = 0
 
     const push = (chunk: string, field: 'content' | 'reasoning'): void => {
       const buf = buffers.get(asstId) ?? { content: '', reasoning: '' }
@@ -171,22 +243,23 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       for (let attempt = 0; ; attempt++) {
         try {
           return await runChat({
-            messages,
+            messages: outgoing,
             effort,
             signal: ctrl.signal,
+            ...(useTools ? { tools: toolDefinitions() } : {}),
             onReasoning: (chunk) => {
               if (reasoningStartedAt === null) reasoningStartedAt = performance.now()
               push(chunk, 'reasoning')
             },
             onContent: (chunk) => {
-              // 第一个正文 token ⇒ 思考结束，耗时当场定下来，
+              // 第一个正文 token ⇒ 这一段思考结束，耗时当场定下来，
               // 面板这时就能报「已思考 X 秒」，不用等整段生成跑完。
-              if (reasoningStartedAt !== null && reasoningEndedAt === null) {
-                reasoningEndedAt = performance.now()
-                patchMessage(convId, asstId, {
-                  reasoningMs: Math.round(reasoningEndedAt - reasoningStartedAt),
-                })
+              if (reasoningStartedAt !== null) {
+                reasoningMs += Math.round(performance.now() - reasoningStartedAt)
+                reasoningStartedAt = null
+                patchMessage(convId, asstId, { reasoningMs })
               }
+              turnContent += chunk
               push(chunk, 'content')
             },
           })
@@ -224,7 +297,83 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     }
 
     try {
-      const outcome = await runWithQueue()
+      let outcome: ChatOutcome = { finishReason: null, endedCleanly: false }
+      let round = 0
+      /** 工具轮次用完了 —— 再要工具也不给了，让模型自己收尾 */
+      let toolLimitHit = false
+
+      while (true) {
+        try {
+          outcome = await runWithQueue()
+        } catch (err) {
+          // 上游不接 tools 了 —— 去掉工具重发一次，别让整轮失败
+          if (useTools && err instanceof ApiError && err.status === 400) {
+            useTools = false
+            patchMessage(convId, asstId, {
+              toolsNote: '上游这次不接工具调用 —— 这次没用上工具。',
+            })
+            continue
+          }
+          throw err
+        }
+
+        const calls = outcome.toolCalls ?? []
+        if (!calls.length || toolLimitHit) break
+
+        const wire = calls.map((c) => ({
+          id: c.id,
+          type: 'function' as const,
+          function: { name: c.function.name, arguments: c.function.arguments },
+        }))
+
+        // 轮次用完 —— 回一句「到头了」，让模型用现有的信息收尾
+        if (round >= MAX_TOOL_ROUNDS) {
+          toolLimitHit = true
+          outgoing = [
+            ...outgoing,
+            { role: 'assistant', content: turnContent, tool_calls: wire },
+            ...calls.map((c) => ({
+              role: 'tool' as const,
+              tool_call_id: c.id,
+              content: `工具轮次用完了（上限 ${MAX_TOOL_ROUNDS} 轮），请用已经拿到的信息回答。`,
+            })),
+          ]
+          turnContent = ''
+          continue
+        }
+
+        // 真去跑工具
+        round += 1
+        const toolMessages: OutgoingMessage[] = []
+        for (const call of calls) {
+          if (ctrl.signal.aborted) break
+          const record: ToolCallRecord = {
+            id: call.id,
+            name: call.function.name,
+            args: call.function.arguments,
+            status: 'running',
+          }
+          toolRecords.push(record)
+          patchMessage(convId, asstId, { tools: [...toolRecords] })
+
+          const result = await runTool(call, { signal: ctrl.signal })
+          record.status = result.ok ? 'done' : 'error'
+          record.result = result.content
+          record.summary = result.summary
+          if (!result.ok) record.error = result.content
+          patchMessage(convId, asstId, { tools: [...toolRecords] })
+
+          toolMessages.push({ role: 'tool', tool_call_id: call.id, content: result.content })
+        }
+
+        // 工具的结果喂回去 —— 模型接着答
+        outgoing = [
+          ...outgoing,
+          { role: 'assistant', content: turnContent, tool_calls: wire },
+          ...toolMessages,
+        ]
+        turnContent = ''
+      }
 
       // 收尾：把残余缓冲刷进 store，再定状态
       if (timer !== null) {
@@ -242,9 +391,13 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
         // 思考耗时：没等到正文 token（比如思考完就被截断）就取到流收尾那一刻
         reasoningMs:
           reasoningStartedAt !== null
-            ? Math.round((reasoningEndedAt ?? performance.now()) - reasoningStartedAt)
-            : undefined,
+            ? reasoningMs + Math.round(performance.now() - reasoningStartedAt)
+            : reasoningMs || undefined,
         truncated,
+        // 工具要了但一件没跑成 —— 说清楚，别让用户对着空回答发呆
+        ...(toolLimitHit && !toolRecords.length
+          ? { content: '（工具轮次用完了，什么也没跑成。）' }
+          : {}),
       })
     } catch (err) {
       if (timer !== null) {
@@ -269,8 +422,8 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
         // 半路被打断也算想过：报出到这一刻为止的耗时
         reasoningMs:
           reasoningStartedAt !== null
-            ? Math.round((reasoningEndedAt ?? performance.now()) - reasoningStartedAt)
-            : undefined,
+            ? reasoningMs + Math.round(performance.now() - reasoningStartedAt)
+            : reasoningMs || undefined,
       })
     } finally {
       controller = null
@@ -340,7 +493,7 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
         ),
       })),
 
-    sendMessage: async (text) => {
+    sendMessage: async (text, attachments) => {
       const trimmed = text.trim()
       if (!trimmed) return
       if (get().streamingId) return
@@ -358,6 +511,8 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
         reasoning: '',
         createdAt: now,
         status: 'complete',
+        // 附件名记在这条消息上 —— 发给上游时要让模型看见
+        ...(attachments && attachments.length ? { attachments } : {}),
       }
 
       const conv = get().conversations.find((c) => c.id === convId)
@@ -414,7 +569,7 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
      * 「重写」的意思是：这一轮之后的东西全部作废 ——
      * 旧的问题、旧的回答、旧的后续，全删掉，用新问题重新问一遍。
      */
-    editMessage: async (messageId, text) => {
+    editMessage: async (messageId, text, attachments) => {
       const trimmed = text.trim()
       if (!trimmed) return
       if (get().streamingId) return
@@ -426,7 +581,12 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       if (conv.messages[idx].role !== 'user') return
 
       const now = Date.now()
-      const edited: Message = { ...conv.messages[idx], content: trimmed, createdAt: now }
+      const edited: Message = {
+        ...conv.messages[idx],
+        content: trimmed,
+        createdAt: now,
+        ...(attachments && attachments.length ? { attachments } : {}),
+      }
       // 只留这一轮之前的消息 + 改过的那条 —— 后面的全部作废
       const history = [...conv.messages.slice(0, idx), edited]
       const isFirst = idx === 0

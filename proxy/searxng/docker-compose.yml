@@ -1,0 +1,32 @@
+# 自建的 SearXNG —— 开源社区最标准的那个元搜索。
+#
+# 起法：
+#     cd proxy/searxng
+#     docker compose up -d
+#     SEARXNG_URL=http://127.0.0.1:8080 node proxy/server.mjs
+#
+# 起来了以后，代理就会先问它要搜索结果（见 proxy/tools.js 里的后端顺序）。
+#
+# 关键一行在 settings.yml 里：formats 必须包含 json。
+# 默认的容器模板只开 html，json 请求会被 403 —— 这一步不做的话，
+# 代理会以为 SearXNG 挂了，然后去试下一个后端。
+
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      # 只绑本地回环 —— 这个服务没有鉴权，别对外开
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:rw
+    environment:
+      # 换掉这个值（openssl rand -hex 32）。不改的话就是「等于路由器没改默认密码」
+      SEARXNG_SECRET: "${SEARXNG_SECRET:-change-me-to-a-random-string}"
+    cap_add:
+      - SYS_PTRACE
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536

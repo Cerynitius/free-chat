@@ -97,6 +97,36 @@ jobs:
           # runner 连不上源站就直接失败 —— 别让一个「隧道起来了但打不通」的假成功混过去
           grep -q '"reachable": true' proxy-ping.json
 
+      - name: 缓存 pip 下载
+        if: steps.current.outputs.mode != 'stand-down'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-doc-${{ runner.os }}-${{ hashFiles('proxy/requirements-doc.txt') }}
+
+      - name: 装文档服务依赖（可选）
+        if: steps.current.outputs.mode != 'stand-down'
+        # ★ 装不上也不能让这一轮挂掉 —— 隧道断了就是全站下线。
+        #   认字和读文档这两个工具会回一句「文档服务没开」，别的照常用。
+        continue-on-error: true
+        run: |
+          python3 -m pip install --break-system-packages --disable-pip-version-check \
+            -r proxy/requirements-doc.txt
+
+      - name: 起文档服务（可选）
+        if: steps.current.outputs.mode != 'stand-down'
+        continue-on-error: true
+        run: |
+          nohup python3 proxy/doc_service.py --port 8788 > doc.log 2>&1 &
+          echo $! > doc.pid
+          sleep 5
+          if curl -sSf --max-time 10 http://127.0.0.1:8788/health > /dev/null; then
+            echo '文档服务起来了'
+          else
+            echo '::warning::文档服务没起来 —— 认字和读文档这两个工具暂时用不了'
+            tail -20 doc.log || true
+          fi
+
       - name: 起隧道
         id: tunnel
         if: steps.current.outputs.mode != 'stand-down'

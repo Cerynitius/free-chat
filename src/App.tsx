@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, SidebarSimple } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { applyTheme } from '@/lib/theme'
+import { addFile, removeAttachment, type Attachment } from '@/lib/attachments'
 import { Composer } from '@/ui/Composer'
 import { EmptyState } from '@/ui/EmptyState'
 import { MessageList } from '@/ui/MessageList'
@@ -23,10 +24,13 @@ export function App(): React.ReactElement {
   const setSidebarCollapsed = useApp((s) => s.setSidebarCollapsed)
   const newConversation = useApp((s) => s.newConversation)
   const editMessage = useApp((s) => s.editMessage)
+  const pushToast = useApp((s) => s.pushToast)
 
   const [input, setInput] = useState('')
   /** 正在改写的那条消息 —— 发出去会替换掉它后面的整轮对话 */
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null)
+  /** 挂着的附件 —— 只在内存里，刷新就没了 */
+  const [attachments, setAttachments] = useState<Attachment[]>([])
 
   const messages = conversation?.messages ?? []
 
@@ -69,13 +73,15 @@ export function App(): React.ReactElement {
     const text = input
     if (!text.trim()) return
     setInput('')
+    // 附件名跟着消息走 —— 模型得知道有哪些文件可读
+    const names = attachments.map((a) => a.name)
     if (editing) {
       const id = editing.id
       setEditing(null)
       // 改写：这一轮之后的东西全作废，重新问一遍
-      void editMessage(id, text)
+      void editMessage(id, text, names)
     } else {
-      void sendMessage(text)
+      void sendMessage(text, names)
     }
   }
 
@@ -93,6 +99,33 @@ export function App(): React.ReactElement {
     newConversation()
     setEditing(null)
     setInput('')
+  }
+
+  /**
+   * 加附件。
+   *
+   * 文本类当场读出内容（不离开本机），二进制类只把字节留在手上 ——
+   * 等工具真的要用的时候才发给文档服务。
+   */
+  const onFiles = async (files: FileList | null): Promise<void> => {
+    if (!files || files.length === 0) return
+    const added: Attachment[] = []
+    for (const file of Array.from(files)) {
+      try {
+        added.push(await addFile(file))
+      } catch (err) {
+        pushToast({
+          text: err instanceof Error ? err.message : `${file.name} 读不了`,
+          tone: 'warn',
+        })
+      }
+    }
+    if (added.length) setAttachments((prev) => [...prev, ...added])
+  }
+
+  const onRemoveAttachment = (id: string): void => {
+    removeAttachment(id)
+    setAttachments((prev) => prev.filter((a) => a.id !== id))
   }
 
   return (
@@ -155,6 +188,11 @@ export function App(): React.ReactElement {
           onEffortChange={(v) => updateSettings({ effort: v })}
           editing={editing !== null}
           onCancelEdit={onCancelEdit}
+          attachments={attachments}
+          onFiles={(files) => void onFiles(files)}
+          onRemoveAttachment={onRemoveAttachment}
+          toolsEnabled={settings.tools}
+          onToolsChange={(v) => updateSettings({ tools: v })}
         />
       </main>
 

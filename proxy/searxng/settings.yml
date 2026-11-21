@@ -1,0 +1,30 @@
+# SearXNG 的设置 —— 只改必要的地方，其余沿用官方默认。
+#
+# 必改的一处：search.formats 要带上 json。
+# 官方容器模板默认只开 html，代理用 ?format=json 问它会被 403。
+
+use_default_settings: true
+
+server:
+  # 这个值用环境变量 SEARXNG_SECRET 覆盖（docker-compose.yml 里设了）。
+  # 不换掉就是「默认密码没改」。
+  secret_key: "change-me-to-a-random-string"
+  bind_address: "0.0.0.0"
+  port: 8080
+  # 一个人用的服务，不用限流
+  limiter: false
+  image_proxy: false
+  method: "GET"
+
+search:
+  # ★ 关键：json 不开的话代理拿不到结果
+  formats:
+    - html
+    - json
+  safe_search: 0
+  autocomplete: ""
+
+outgoing:
+  # 默认的出口超时对中文站点偏短
+  request_timeout: 8.0
+  max_request_timeout: 20.0

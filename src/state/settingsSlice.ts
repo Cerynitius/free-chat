@@ -4,6 +4,7 @@ import { DEFAULT_EFFORT } from '@/config'
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   effort: DEFAULT_EFFORT,
+  tools: true,
 }
 
 export const settingsSlice = (set: AppSet): SettingsSlice => ({

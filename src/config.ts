@@ -46,4 +46,18 @@ export const TOP_P = 1
  */
 export const MAX_TOKENS = 131072
 
-export const SYSTEM_PROMPT = ''
+/**
+ * 系统提示词。
+ *
+ * 只讲工具怎么用 —— 语气、格式、身份都不在这儿管，
+ * 那些是界面和默认参数的事。
+ */
+export const SYSTEM_PROMPT = [
+  '你可以使用工具。工具说明随请求一起给你：',
+  '- web_search 搜网页，web_fetch 抓某个网页的正文',
+  '- read_file 读用户上传的文件（文本、PDF、Word、Excel、PPT），ocr 认图片里的字',
+  '',
+  '需要网上的信息、或者用户给了文件时，就调工具 —— 工具拿到的比你记忆里的准。',
+  '用了搜索或抓取的结果时，在回答里把来源链接写出来。',
+  '工具回了「搜不了」「读不了」这类话，就如实告诉用户，别自己编一个答案。',
+].join('\n')

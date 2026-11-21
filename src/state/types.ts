@@ -50,6 +50,47 @@ export interface RetryNotice {
   message: string
 }
 
+/**
+ * 一次工具调用的记录。
+ *
+ * 挂在助手消息上 —— 界面把它画成一张卡片，
+ * 同时也是回给上游的凭据（tool_calls + role:"tool" 两条消息）。
+ */
+export interface ToolCallRecord {
+  /** 上游给的调用 id —— 回结果时要用它对上号 */
+  id: string
+  /** 工具名 */
+  name: string
+  /** 参数原文（模型给的是 JSON 字符串） */
+  args: string
+  /** 跑到哪儿了 */
+  status: 'running' | 'done' | 'error'
+  /** 回给模型的结果 */
+  result?: string
+  /** 一句话摘要，界面上显示用 */
+  summary?: string
+  /** 工具自己报的错 */
+  error?: string
+}
+
+/** 发给上游的工具调用（协议里的形状） */
+export interface WireToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+/**
+ * 发给上游的消息。
+ *
+ * 比 Role 宽 —— 工具那一轮里，助手消息要带 tool_calls，
+ * 工具结果是一条 role:"tool" 的消息。
+ */
+export type OutgoingMessage =
+  | { role: 'user' | 'system'; content: string }
+  | { role: 'assistant'; content: string; tool_calls?: WireToolCall[] }
+  | { role: 'tool'; tool_call_id: string; content: string }
+
 export interface Message {
   id: string
   role: Role
@@ -66,6 +107,17 @@ export interface Message {
   truncated?: Truncation
   /** 思考耗时（ms）：从第一个思考 token 到第一个正文 token，面板上显示「已思考 3.2 秒」 */
   reasoningMs?: number
+  /** 这一轮用过的工具 */
+  tools?: ToolCallRecord[]
+  /** 工具这一套出了状况时的说明（比如上游不接工具调用了） */
+  toolsNote?: string
+  /**
+   * 这条消息带的是哪些附件（文件名）。
+   *
+   * 界面上不显示（附件有自己的位置），但**发给上游时要带上** ——
+   * 不然模型不知道有哪些文件可读，只能反过来问用户文件名。
+   */
+  attachments?: string[]
 }
 
 export interface Conversation {
@@ -85,12 +137,14 @@ export interface Conversation {
 }
 
 /**
- * 只有两样东西还归用户管：主题和思考档位。
+ * 只有三样东西还归用户管：主题、思考档位，和工具开不开。
  * 端点、key、模型、采样参数全部写死在 src/config.ts —— 界面不做通用 API 配置。
  */
 export interface Settings {
   theme: ThemeMode
   effort: ReasoningEffort
+  /** 工具（搜索 / 抓页面 / 读文件 / 认字）要不要开着 */
+  tools: boolean
 }
 
 export interface Toast {
@@ -119,14 +173,14 @@ export interface ChatSlice {
   renameConversation: (id: string, title: string) => void
   /** 置顶 / 取消置顶 */
   togglePin: (id: string) => void
-  sendMessage: (text: string) => Promise<void>
+  sendMessage: (text: string, attachments?: string[]) => Promise<void>
   stopGeneration: () => void
   regenerate: (messageId: string) => Promise<void>
   /**
    * 改写一条用户消息：删掉它和它之后的全部对话，
    * 用新内容替换，然后让模型重新回答这一轮。
    */
-  editMessage: (messageId: string, text: string) => Promise<void>
+  editMessage: (messageId: string, text: string, attachments?: string[]) => Promise<void>
 }
 
 export interface UiSlice {

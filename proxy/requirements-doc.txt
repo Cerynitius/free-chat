@@ -1,0 +1,24 @@
+# 文档服务（proxy/doc_service.py）的依赖。
+#
+# 装法：
+#     pip install -r proxy/requirements-doc.txt
+#
+# 这个服务是**可选**的 —— 不装的话代理照样跑，认字和读文档这两个工具
+# 会回一句「文档服务没开」，其它工具不受影响。
+
+# Word / Excel / PDF / PPT → 文字。
+# 只装这几个 extra，别上 [all] —— [all] 会拖进 pandas、magika 这些大家伙。
+markitdown[pdf,docx,xlsx,pptx,xls]
+
+# 图片 → 文字。PaddleOCR 的 ONNX 版：同一批模型，CPU 上快四五倍，
+# 内存小一个量级，依赖只有五六个。
+rapidocr-onnxruntime
+onnxruntime
+
+# 扫描版 PDF：把页面栅格化成图，好交给上面那个认字。
+# 预编译轮子，不用装 poppler。
+pypdfium2
+
+# 栅格化出来的是 PIL 图，认字前要转成 numpy 数组。
+pillow
+numpy

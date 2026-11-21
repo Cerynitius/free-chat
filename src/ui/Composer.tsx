@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { PaperPlaneRight, PencilSimple, Stop, X } from '@phosphor-icons/react'
+import { Paperclip, PaperPlaneRight, PencilSimple, Stop, Wrench, X } from '@phosphor-icons/react'
 import { EffortPicker } from './EffortPicker'
+import { formatSize, type Attachment } from '@/lib/attachments'
 
 interface Props {
   value: string
@@ -13,6 +14,13 @@ interface Props {
   /** 正在改写某条消息（发出去 = 替换掉那一轮） */
   editing: boolean
   onCancelEdit: () => void
+  /** 挂着的附件 */
+  attachments: Attachment[]
+  onFiles: (files: FileList | null) => void
+  onRemoveAttachment: (id: string) => void
+  /** 工具开不开 */
+  toolsEnabled: boolean
+  onToolsChange: (v: boolean) => void
 }
 
 export function Composer({
@@ -25,8 +33,14 @@ export function Composer({
   onEffortChange,
   editing,
   onCancelEdit,
+  attachments,
+  onFiles,
+  onRemoveAttachment,
+  toolsEnabled,
+  onToolsChange,
 }: Props): React.ReactElement {
   const ref = useRef<HTMLTextAreaElement | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
   const [focused, setFocused] = useState(false)
 
   // 自增高
@@ -92,9 +106,67 @@ export function Composer({
             className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.7] text-ink outline-none placeholder:text-faint"
             aria-label="输入消息"
           />
+
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pb-1">
+              {attachments.map((a) => (
+                <span
+                  key={a.id}
+                  className="inline-flex max-w-[220px] items-center gap-1 rounded-xs border border-line bg-surface-2 py-0.5 pl-2 pr-1 text-[11px] text-muted"
+                >
+                  <span className="min-w-0 truncate">{a.name}</span>
+                  <span className="shrink-0 text-faint">{formatSize(a.size)}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-xs p-0.5 text-faint transition-colors hover:text-ink"
+                    onClick={() => onRemoveAttachment(a.id)}
+                    aria-label={`去掉 ${a.name}`}
+                    title="去掉"
+                  >
+                    <X size={10} weight="bold" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
             <div className="flex min-w-0 items-center gap-1.5">
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  onFiles(e.target.files)
+                  // 选完把 input 清空 —— 不然同一个文件再选一次就不触发 change 了
+                  e.target.value = ''
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={() => fileRef.current?.click()}
+                aria-label="添加附件"
+                title="添加附件（文本、PDF、Word、Excel、图片）"
+              >
+                <Paperclip size={15} weight="bold" />
+              </button>
+
               <EffortPicker value={effort} onChange={onEffortChange} />
+
+              <button
+                type="button"
+                className={`tag cursor-pointer normal-case ${
+                  toolsEnabled ? 'text-ink-2' : 'text-faint'
+                }`}
+                onClick={() => onToolsChange(!toolsEnabled)}
+                aria-pressed={toolsEnabled}
+                title="工具：搜索网页、抓网页、读附件、认字"
+              >
+                <Wrench size={11} weight="bold" />
+                工具 · {toolsEnabled ? '开' : '关'}
+              </button>
             </div>
             {streaming ? (
               <button type="button" className="btn btn-icon" onClick={onStop} aria-label="停止生成">

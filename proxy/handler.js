@@ -9,14 +9,23 @@
  * Deno Deploy、Vercel Edge 和 Node 上跑，env 的差异全部收敛到 resolveEnv()。
  */
 
+import { TOOL_PATHS, handleToolRequest } from './tools.js'
+
 /** 上游默认地址。只有这个 IP + 这个端口能通，http:// 会被 nginx 用 400 挡掉。 */
 export const DEFAULT_UPSTREAM = 'https://182.92.245.176:1920'
 
 /**
  * 上游只放行这三条路径。代理保持同样的白名单 —— 不多不少，
  * 免得代理变成一个可以任意探上游的跳板。
+ *
+ * 工具那几条是代理自己处理的（不往上游走）：搜索、抓页面、认字、读文档。
  */
-const ALLOWED_PATHS = ['/v1/chat/completions', '/v1/models', '/health']
+const ALLOWED_PATHS = [
+  '/v1/chat/completions',
+  '/v1/models',
+  '/health',
+  ...TOOL_PATHS,
+]
 
 /**
  * 逐跳头：连接级别的信息，只对当前这一跳有意义，转发出去只会让下游出错
@@ -74,7 +83,22 @@ function resolveConfig(env) {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
-  return { upstream, apiKey, allowedOrigins }
+  return {
+    upstream,
+    apiKey,
+    allowedOrigins,
+    // 工具那一套的配置
+    searxngUrl: String(source.SEARXNG_URL || '').trim(),
+    braveKey: String(source.BRAVE_API_KEY || '').trim(),
+    tavilyKey: String(source.TAVILY_API_KEY || '').trim(),
+    docUrl: String(source.DOC_URL || 'http://127.0.0.1:8788').trim(),
+    /**
+     * 前门模式：这个部署是固定入口（Worker），真正的代理在隧道另一头。
+     * 这种情况下工具请求要**转发**过去 —— 认字和读文档要本机的 Python 服务，
+     * 只有隧道那台机器上才有。
+     */
+    frontDoor: Boolean(String(source.UPSTREAM_POINTER || '').trim()),
+  }
 }
 
 /**
@@ -337,6 +361,18 @@ export async function handleRequest(request, env) {
   if (path === '/__ping') {
     return handlePing(request, { ...config, upstream }, cors)
   }
+
+  // 工具请求有两种走法：
+  //
+  //   前门模式（UPSTREAM_POINTER 有值 = 这个部署是固定入口，前面还有隧道）
+  //     → 转发给隧道那台机器。认字和读文档要本机的 Python 服务，
+  //       只有隧道那台机器上才有 —— 入口这一侧什么也做不了。
+  //   其它部署（本地代理、自建服务器、Vercel）
+  //     → 就地处理。
+  if (TOOL_PATHS.includes(path) && !config.frontDoor) {
+    return handleToolRequest(request, path, url, config, cors)
+  }
+  // 前门模式：落回下面的转发逻辑
 
   if (!ALLOWED_PATHS.includes(path)) {
     return jsonResponse(

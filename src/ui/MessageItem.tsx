@@ -6,6 +6,7 @@ import { markdownToText } from '@/lib/plain'
 import { CopyMenu } from './CopyMenu'
 import { Markdown } from './Markdown'
 import { ReasoningPanel } from './ReasoningPanel'
+import { ToolCard } from './ToolCard'
 
 interface Props {
   message: Message
@@ -115,6 +116,7 @@ export function MessageItem({
 
   const empty = !message.content.trim() && !message.reasoning.trim()
   const note = message.truncated ? TRUNCATION_NOTE[message.truncated.kind] : null
+  const tools = message.tools ?? []
 
   return (
     <div className="group">
@@ -123,10 +125,23 @@ export function MessageItem({
           <ReasoningPanel
             text={message.reasoning}
             /* 正文一开始，思考就算结束 —— 面板这时该收成一行摘要 */
-            thinking={streaming && !message.content}
+            thinking={streaming && !message.content && tools.length === 0}
             elapsedMs={message.reasoningMs}
           />
         </div>
+      )}
+
+      {/* 工具调用：一张卡片一次调用，跑的时候卡片上写着「跑着呢…」 */}
+      {tools.length > 0 && (
+        <div className="mb-3 flex flex-col gap-1.5">
+          {tools.map((t) => (
+            <ToolCard key={t.id} record={t} />
+          ))}
+        </div>
+      )}
+
+      {message.toolsNote && (
+        <div className="mb-3 text-[12px] text-muted">{message.toolsNote}</div>
       )}
 
       {message.status === 'error' ? (

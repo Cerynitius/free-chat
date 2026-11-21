@@ -1,4 +1,4 @@
-import type { ReasoningEffort, Role, Truncation } from '@/state/types'
+import type { OutgoingMessage, ReasoningEffort, Truncation, WireToolCall } from '@/state/types'
 import { MAX_TOKENS, MODEL, SYSTEM_PROMPT, TEMPERATURE, TOP_P } from '@/config'
 import {
   ApiError,
@@ -10,23 +10,36 @@ import {
   friendlyStreamError,
 } from './api'
 import { readSSE } from './sse'
+import type { ToolDefinition } from './tools'
 
 export interface ChatChunk {
   id?: string
   model?: string
   choices?: {
     index?: number
-    delta?: { role?: string; content?: string; reasoning_content?: string }
+    delta?: {
+      role?: string
+      content?: string
+      reasoning_content?: string
+      tool_calls?: {
+        index?: number
+        id?: string
+        type?: string
+        function?: { name?: string; arguments?: string }
+      }[]
+    }
     finish_reason?: string | null
   }[]
 }
 
 export interface ChatParams {
-  messages: { role: Role; content: string }[]
+  messages: OutgoingMessage[]
   effort: ReasoningEffort
   signal: AbortSignal
   onReasoning: (chunk: string) => void
   onContent: (chunk: string) => void
+  /** 发给上游的工具清单 —— 不给就是不带工具 */
+  tools?: ToolDefinition[]
 }
 
 /** 一次生成的结果 —— 重点是「它到底有没有说完」。 */
@@ -35,6 +48,13 @@ export interface ChatOutcome {
   finishReason: string | null
   /** 流有没有正常收尾 —— 收到 [DONE] 或 finish_reason 才算正常 */
   endedCleanly: boolean
+  /**
+   * 这一轮模型要调的工具。
+   *
+   * 上游把参数拆成一小段一小段发过来（arguments 是分片的），
+   * 这里按 index 拼回去。
+   */
+  toolCalls?: WireToolCall[]
 }
 
 /**
@@ -47,7 +67,7 @@ export async function runChat(p: ChatParams): Promise<ChatOutcome> {
   const body = {
     model: MODEL,
     messages: SYSTEM_PROMPT.trim()
-      ? [{ role: 'system' as const, content: SYSTEM_PROMPT }, ...p.messages]
+      ? ([{ role: 'system' as const, content: SYSTEM_PROMPT }, ...p.messages] as OutgoingMessage[])
       : p.messages,
     // ★ 这个后端强制要求 stream:true，stream:false 直接 400
     stream: true,
@@ -55,6 +75,8 @@ export async function runChat(p: ChatParams): Promise<ChatOutcome> {
     temperature: TEMPERATURE,
     top_p: TOP_P,
     max_tokens: MAX_TOKENS,
+    // 带了工具，上游才会调工具 —— 不带的话它只会聊天
+    ...(p.tools && p.tools.length ? { tools: p.tools } : {}),
   }
 
   let res: Response
@@ -78,6 +100,8 @@ export async function runChat(p: ChatParams): Promise<ChatOutcome> {
 
   let finishReason: string | null = null
   let sawDone = false
+  /** 工具调用按 index 拼 —— 参数是一小段一小段来的 */
+  const pendingTools = new Map<number, { id: string; name: string; args: string }>()
 
   for await (const frame of readSSE(res)) {
     if (frame === '[DONE]') {
@@ -108,9 +132,31 @@ export async function runChat(p: ChatParams): Promise<ChatOutcome> {
     if (!delta) continue
     if (delta.reasoning_content) p.onReasoning(delta.reasoning_content)
     if (delta.content) p.onContent(delta.content)
+    // 工具调用：名字和参数是分开来的，参数还是分片的
+    for (const call of delta.tool_calls ?? []) {
+      const index = call.index ?? 0
+      const entry = pendingTools.get(index) ?? { id: '', name: '', args: '' }
+      if (call.id) entry.id = call.id
+      if (call.function?.name) entry.name = call.function.name
+      if (call.function?.arguments) entry.args += call.function.arguments
+      pendingTools.set(index, entry)
+    }
   }
 
-  return { finishReason, endedCleanly: sawDone || finishReason !== null }
+  const toolCalls: WireToolCall[] = [...pendingTools.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .filter(([, call]) => call.name)
+    .map(([, call]) => ({
+      id: call.id || `call_${Math.random().toString(36).slice(2, 10)}`,
+      type: 'function' as const,
+      function: { name: call.name, arguments: call.args || '{}' },
+    }))
+
+  return {
+    finishReason,
+    endedCleanly: sawDone || finishReason !== null,
+    ...(toolCalls.length ? { toolCalls } : {}),
+  }
 }
 
 /**

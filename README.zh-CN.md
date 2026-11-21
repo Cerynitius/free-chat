@@ -40,6 +40,7 @@
 | 代码 | 14 种语言的语法高亮，每个代码块都带一个能用的复制按钮 |
 | 数学公式 | KaTeX 渲染，行内 `$...$`、独立成块的 `$$...$$`、LaTeX 原生的 `\(...\)` 与 `\[...\]` 都支持；KaTeX 解析不了的公式退回等宽原文，而不是一大坨红字 |
 | 消息操作 | 重新生成、随时停止生成、复制回答（纯文本或 Markdown）、改写问题（改写即重写：这一轮之后的话全部作废，重新问一遍） |
+| 工具 | 模型自己够得着的四样：搜网页、抓网页、读附件、把图片里的字认出来。每一次调用都在回答里画成一张卡片，写清楚调了什么、传了什么参数、回来什么结果 |
 | 报错 | 上游的错翻成人话：上游满了就说满了并等一分钟重试（最多五次），密钥不对就说密钥该配在哪儿，连不上就说断在哪一跳 —— 上游原话压在下面当小字，需要的时候翻它 |
 | 本地历史 | 会话存在本地，按今天 / 昨天 / 本周 / 更早分组；自动命名，可重命名、可置顶，右键呼出「重命名 / 置顶 / 删除」 |
 | 主题 | 浅色 / 深色 / 跟随系统，侧栏底部一个图标按钮就能切 |
@@ -47,7 +48,7 @@
 | 欢迎界面 | 每次进来都是一个新的空会话，老的都在侧边栏里点一下就到；品牌字在一个字一个字写出来，写完留一道金线 —— 不想看动效的人直接看到写完的样子 |
 | 响应式 | 一套布局，从窄屏手机一直适配到宽屏桌面 |
 
-明确不做：tool calling（服务端不支持）、图片输入（这个 API 没有视觉能力）、多模型切换（只有一个模型）。
+明确不做：图片输入（这个 API 没有视觉能力 —— 图片走 OCR 认字）、多模型切换（只有一个模型）。
 
 <a id="quickstart"></a>
 ## 快速开始
@@ -153,7 +154,7 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | 结束标记 | `finish_reason: "stop"`；token 预算用尽时是 `"length"`。任何一帧里都没有 `usage` 字段。 |
 | 思考档位 | 接受 `off`、`none`、`low`、`high`、`max`。 |
 | 采样参数 | 支持 `system` 角色、`temperature`、`top_p`、`stop`。 |
-| 工具调用 | 服务端不支持。 |
+| 工具调用 | 支持，走的是 OpenAI 的标准形状：模型回 `delta.tool_calls`（参数分片下发）、`finish_reason: "tool_calls"`，也接受随后那条带结果的 `role: "tool"` 消息。实测出来的，不是猜的。 |
 
 服务端永远不报 token 用量，所以界面上干脆不显示任何用量计数 —— 没有可估的数，也就没有要显示的数。
 
@@ -172,6 +173,52 @@ $env:API_KEY = "sk-your-key"; npm run tunnel
 | 输出被截断 | 上游撞到了 `max_tokens`。思考和正文共用这一个预算。 |
 | 连接中断 | 流没收到结束标记就断了 —— 下面这段可能不完整。 |
 | 内容被过滤 | 上游自己的过滤器把这一段截了。 |
+
+### 工具
+
+模型自己够得着四样工具。要用的时候它自己决定，工具跑完，结果再喂回对话里 —— 就是 OpenAI 那套标准协议，这个上游说的是同一套：它回 `delta.tool_calls`（参数分片下发）、`finish_reason: "tool_calls"`，也接受随后那条带结果的 `role: "tool"` 消息。
+
+| 工具 | 跑在哪 | 干什么 |
+|---|---|---|
+| `web_search` | 服务端 | 搜网页，返回标题、链接和摘要。 |
+| `web_fetch` | 服务端 | 抓一个网址，返回正文。 |
+| `read_file` | 先浏览器，再服务端 | 读附件。文本文件在浏览器里读，压根不离开本机；PDF、Word、Excel、PPT 交给文档服务转成文字。 |
+| `ocr` | 服务端 | 把图片里的字认出来。 |
+
+每一次调用都会在回答里画成一张卡片：调了什么、传了什么参数、回来什么结果。点开就是原始请求和原始结果。服务端那几个工具由同一个代理提供，挂在 `/tools/` 下面。
+
+模型只知道给它的名字 —— 消息上挂了哪些附件，会跟着消息一起发过去，所以它不用停下来问「那文件叫什么」。
+
+#### 搜索后端
+
+搜索得要有个后端。有三种给法，按这个顺序试：
+
+| 后端 | 怎么配 | 是什么 |
+|---|---|---|
+| SearXNG | `SEARXNG_URL` | 自建的元搜索 —— 开源社区的标准答案，`github.com/searxng/searxng`。哪儿都不用注册，但得自己起一个：`proxy/searxng/docker-compose.yml` 已经备好。 |
+| Brave Search | `BRAVE_API_KEY` | 官方接口，免费额度每月 2000 次。 |
+| Tavily | `TAVILY_API_KEY` | 官方接口，免费额度每月 1000 次，本来就是给 agent 用的。 |
+
+一个都不配的话，代理会退回去抓 Bing 的结果页 —— 不用账号不用 key，但那是兜底，不是保证。全挂了的时候，工具会明说「搜不了」，模型就自己掂量着答，不会瞎编。
+
+#### 文档服务
+
+读 PDF、Word、Excel 或者图片里的字，要有真的解析器，而解析器要真的运行时 —— Cloudflare Workers 和 Vercel Edge 跑不了这些东西。它们放在代理旁边的一个小 Python 服务里，`proxy/doc_service.py`：
+
+- **文档**用 [MarkItDown](https://github.com/microsoft/markitdown)（MIT）转：PDF、`.docx`、`.xlsx`、`.pptx`，还有老版的 `.xls`。
+- **图片**用 [RapidOCR](https://github.com/RapidAI/RapidOCR) 认 —— 它是 PaddleOCR 那批模型导成 ONNX 的样子：准确率一样，CPU 上快四倍，内存只占五分之一，而且不用装 PaddlePaddle。
+- **扫描版 PDF**（每一页都是图片的那种）用 pypdfium2 栅格化成图，再交给 OCR 认。最多认 20 页，超出的部分会明说没读到。
+
+这个服务是**可选**的。没它别的照常工作，需要它的两个工具会回一句「文档服务没开」。
+
+```bash
+pip install -r proxy/requirements-doc.txt
+npm run doc          # http://127.0.0.1:8788
+```
+
+代理通过 `DOC_URL` 找它，默认是 `http://127.0.0.1:8788`。
+
+老版的 `.doc` 和 `.ppt`（2007 年以前那个二进制格式）解析不了 —— 工具会明说，并让你另存为 `.docx`。
 
 ### 请求地址是从哪来的
 
@@ -245,10 +292,11 @@ POST /v1/chat/completions  ->  同样零 CORS 头
 
 1. 装 `cloudflared`；
 2. 起本地代理（`node proxy/server.mjs`，key 从仓库 secret `VITE_API_KEY` 读）；
-3. 开一条 `cloudflared tunnel --url http://127.0.0.1:8787`；
-4. 把拿到的 `https://<随机串>.trycloudflare.com` 地址写进 `runtime` 分支的 `tunnel-url` 文件；
-5. 让代理和隧道一直活着，直到这个 job 到点；
-6. 离到期还剩 90 分钟时，用仓库自带的 `GITHUB_TOKEN` 调 Actions API 叫起下一轮（`workflow_dispatch` 不受「GITHUB_TOKEN 触发的事件不产生新 run」那条限制 —— GitHub 明确把它排除在外）。
+3. 装文档服务并起起来（可选 —— 这步挂了也不影响隧道）；
+4. 开一条 `cloudflared tunnel --url http://127.0.0.1:8787`；
+5. 把拿到的 `https://<随机串>.trycloudflare.com` 地址写进 `runtime` 分支的 `tunnel-url` 文件；
+6. 让代理和隧道一直活着，直到这个 job 到点；
+7. 离到期还剩 90 分钟时，用仓库自带的 `GITHUB_TOKEN` 调 Actions API 叫起下一轮（`workflow_dispatch` 不受「GITHUB_TOKEN 触发的事件不产生新 run」那条限制 —— GitHub 明确把它排除在外）。
 
 runner 不接受假成功：工作流会探一次 `/__ping`，响应里没有 `"reachable": true` 就直接判失败。隧道起来了但打不通源站，不会被当成成功。
 
@@ -444,12 +492,13 @@ VITE_PROXY_URL=https://proxy.example.com npm run build
 <a id="settings"></a>
 ## 可调项
 
-没有配置界面。运行时能调的就三项，而且都能在界面上直接点到：
+没有配置界面。运行时能调的就四项，而且都能在界面上直接点到：
 
 | 可调项 | 默认值 | 入口 | 说明 |
 |---|---|---|---|
 | 主题 | `system` | 侧栏底部的图标按钮 | `light`、`dark`，或者跟随操作系统。那个按钮在浅色和深色之间来回切。 |
 | 思考档位 | `low` | 输入框左下角的 chip | 取 `off`、`none`、`low`、`high`、`max`，作为 `reasoning_effort` 每次请求都带上。 |
+| 工具 | 开 | 输入框左下角的 chip | 模型能不能调工具。关掉的话请求里就不带 `tools`，模型只聊天。 |
 | 侧边栏收起 | 展开 | 主区左上角的图标按钮 | 把桌面端侧边栏收起来，下次进来还记得。 |
 
 其余参数全部写死在 `src/config.ts` 里，界面上不提供修改：源站地址、代理地址、API key、模型 id、`temperature`、`top_p`、`max_tokens`、系统提示词。想改其中任何一个，只能改那一个文件然后重新构建。
@@ -539,6 +588,7 @@ npm run typecheck  # TypeScript 检查，不产出文件
 npm run build      # 类型检查加生产构建，产物在 dist/
 npm run preview    # 本地预览生产构建
 npm run check:readme  # 检查两份 README 是否同步
+npm run doc     # 可选：文档服务，127.0.0.1:8788
 ```
 
 ### 目录结构
@@ -554,13 +604,19 @@ hippocrenes-model-chat/
 │   ├── config.ts         # 源站、模型、key、采样参数
 │   ├── styles.css        # 设计 token 与组件类
 │   ├── lib/              # api、chat、sse、markdown、hljs、
-│   │                     # storage、theme、date、clipboard
+│   │                     # storage、theme、date、clipboard、tools、
+│   │                     # attachments
 │   ├── state/            # store、三个 slice、类型、持久化
 │   └── ui/               # 展示型组件
 ├── proxy/
 │   ├── handler.js        # 共享核心：CORS、注入 key、SSE 透传
+│   ├── tools.js          # 工具接口：搜索、抓页面、认字、读文档
 │   ├── server.mjs        # Node runner
 │   ├── tunnel.mjs        # 本机代理加 Cloudflare 快速隧道
+│   ├── doc_service.py    # 可选的文档服务：MarkItDown + RapidOCR
+│   ├── doc.mjs           # 用机器上有的 python 起文档服务
+│   ├── requirements-doc.txt
+│   ├── searxng/          # 自建的 SearXNG，给搜索工具用
 │   ├── deno.ts           # Deno Deploy 入口
 │   ├── api/[...path].js # Vercel 入口，Node 运行时
 │   ├── vercel/edge.ts    # Vercel Edge 入口
@@ -578,8 +634,8 @@ hippocrenes-model-chat/
 
 状态拆成三个 slice，共用一份类型模块，所以任何 slice 都不用 import 另一个 slice：
 
-- `settingsSlice` 放两个运行时选项：主题和思考档位。
-- `chatSlice` 放会话和流式生命周期。收到的 SSE 分片先进缓冲，再以每秒十二次左右的频率刷进 store，这样长答案不会每来一个 token 就重渲染一遍。
+- `settingsSlice` 放三个运行时选项：主题、思考档位，还有工具开不开。
+- `chatSlice` 放会话和流式生命周期。收到的 SSE 分片先进缓冲，再以每秒十二次左右的频率刷进 store，这样长答案不会每来一个 token 就重渲染一遍。工具循环也在这儿：工具调用跑完，结果回喂给模型，回答接着写进同一条消息。
 - `uiSlice` 放侧边栏的开关、滚动位置、未读计数和 toast。
 
 会话与设置持久化在 `localStorage` 的 `hippocrenes.chat.v2` 键下，写入有 400 毫秒防抖，最多留 50 条会话。

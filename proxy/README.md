@@ -79,11 +79,49 @@ the tunnel, not as the place where the proxy runs. See
 | `GET /v1/models` | Forwarded, with CORS headers added. |
 | `POST /v1/chat/completions` | Forwarded, streamed through as `text/event-stream`. |
 | `GET /health` | Forwarded. |
+| `GET /tools/search?q=` | Answered here. Searches the web and returns `{ok, source, results}`. |
+| `GET /tools/fetch?url=` | Answered here. Fetches a page and returns `{ok, url, title, text}`. |
+| `POST /tools/ocr` | Answered here. Image bytes in, recognised text out. Also takes `?url=` instead of a body. |
+| `POST /tools/document` | Answered here. Document bytes in, text out. Takes `?filename=`, and `?offset=` / `?limit=` to page through it. |
 | anything else | `403` with the upstream's own error shape. |
 
-Only `/v1/chat/completions`, `/v1/models`, and `/health` are allowed through —
-the same three routes the upstream exposes. The proxy must not become a
-general-purpose relay.
+Only `/v1/chat/completions`, `/v1/models`, and `/health` are allowed through to
+the upstream — the same three routes the upstream exposes. The proxy must not
+become a general-purpose relay. The four `/tools/*` routes never reach the
+upstream: they are the proxy's own work.
+
+### The tool routes
+
+The browser cannot reach a search engine or a web page on its own — neither
+sends CORS headers — so those requests have to come from a server. The proxy
+does them.
+
+**Search** tries four backends in this order and takes the first that answers:
+a self-hosted SearXNG (`SEARXNG_URL`), the Brave API (`BRAVE_API_KEY`), the
+Tavily API (`TAVILY_API_KEY`), and finally the Bing result page. The last one
+needs no account, but it is a fallback and not a promise — the page layout can
+change under it, and search engines rate-limit by address.
+
+**Fetch** goes through Jina Reader first, which returns clean markdown and
+handles pages that need JavaScript. If that fails the proxy extracts the text
+itself. Either way the URL is checked first: only `http` and `https`, and the
+address the name resolves to must not be a private, loopback, link-local or
+reserved one. The proxy is on the public internet and the model picks these
+URLs, so without that check it would be a way into the machine it runs on.
+
+**OCR and documents** need a parser, and parsers need a real runtime — the
+Workers edge and Vercel Edge cannot run them. They live in a small Python
+service next to the proxy, `doc_service.py`, and the proxy forwards the bytes
+to it. When the proxy runs as a front door in front of a tunnel, it forwards
+the tool routes to the tunnel as well, because that is where the service is.
+
+The service is optional. Without it, everything else works and the two routes
+that need it answer that the service is not running.
+
+```bash
+pip install -r requirements-doc.txt
+npm run doc          # or: node doc.mjs --port 8788
+```
 
 ### Configuration
 
@@ -92,9 +130,17 @@ All platforms inject the same variables:
 | Variable | Default | Meaning |
 |---|---|---|
 | `UPSTREAM` | `https://182.92.245.176:1920` | Upstream base URL. Only `https` works; plain HTTP to that port gets nginx's `400 plain HTTP request was sent to HTTPS port`. |
-| `UPSTREAM_POINTER` | *(unset)* | URL of a publicly readable text file whose content is the current upstream address. When it is set, the proxy fetches that file at runtime and uses what it finds as the upstream. See [The upstream pointer](#the-upstream-pointer). |
+| `UPSTREAM_POINTER` | *(unset)* | URL of a publicly readable text file whose content is the current upstream address. When it is set, the proxy fetches that file at runtime and uses what it finds as the upstream. See [The upstream pointer](#the-upstream-pointer). It also marks this deployment as a front door: the tool routes are then forwarded to the tunnel instead of answered here. |
 | `API_KEY` | *(unset)* | Bearer token injected into upstream requests. **If set, it overrides whatever the client sent.** If unset, the client's `Authorization` header is passed through unchanged. |
 | `ALLOWED_ORIGINS` | *(empty)* | Comma-separated `Origin` allowlist. Empty means allow everything (`*`). When non-empty, only listed origins get an `Access-Control-Allow-Origin` header — for any other origin the header is simply omitted, and the browser does the blocking. |
+| `SEARXNG_URL` | *(unset)* | Base URL of a SearXNG instance. Its JSON API has to be enabled — `formats: [html, json]` in `settings.yml`; the stock container answers `403` otherwise. |
+| `BRAVE_API_KEY` | *(unset)* | Brave Search API key. 2000 queries a month for free. |
+| `TAVILY_API_KEY` | *(unset)* | Tavily API key. 1000 queries a month for free. |
+| `DOC_URL` | `http://127.0.0.1:8788` | Where the document service listens. If it is not there, the two routes that need it say so. |
+
+If the proxy itself runs behind an HTTP proxy, add `127.0.0.1` to `NO_PROXY` —
+otherwise the request to the document service goes out through that proxy too
+and never arrives.
 
 ### The upstream pointer
 
@@ -137,10 +183,12 @@ hours (`timeout-minutes: 330`). Inside a run it:
 1. installs `cloudflared`;
 2. starts the local proxy (`node proxy/server.mjs`) with the key read from the
    repository secret `VITE_API_KEY`;
-3. opens `cloudflared tunnel --url http://127.0.0.1:8787`;
-4. writes the resulting tunnel address into the `tunnel-url` file on the
+3. installs the document service and starts it — optional, and a failure there
+   does not take the tunnel down;
+4. opens `cloudflared tunnel --url http://127.0.0.1:8787`;
+5. writes the resulting tunnel address into the `tunnel-url` file on the
    `runtime` branch;
-5. keeps the proxy and the tunnel alive until the job reaches its time limit.
+6. keeps the proxy and the tunnel alive until the job reaches its time limit.
 
 The run fails when the runner cannot reach the origin: the workflow probes
 `/__ping` and requires `"reachable": true` in the answer, so a tunnel that came
@@ -388,6 +436,13 @@ curl -N https://your-proxy.example/v1/chat/completions \
 
 # Path allowlist: 403 in the upstream's error shape
 curl -i https://your-proxy.example/v1/embeddings -X POST
+
+# The tools: search answers with results, fetch answers with text
+curl -s "https://your-proxy.example/tools/search?q=weather" | head -c 300
+curl -s "https://your-proxy.example/tools/fetch?url=https://example.com" | head -c 300
+
+# The SSRF guard: a private address has to be refused
+curl -s "https://your-proxy.example/tools/fetch?url=http://169.254.169.254/"
 ```
 
 ---
@@ -439,8 +494,13 @@ after deploying.** Check that the entry point exports the right shape:
 | File | Purpose |
 |---|---|
 | `handler.js` | Core logic. Exports `handleRequest(request, env)` and `default { fetch }`. Zero dependencies, Web standard APIs only. Resolves the upstream from `UPSTREAM_POINTER` when that variable is set. |
+| `tools.js` | The tool routes: search, fetch, OCR, documents. Zero dependencies, Web standard APIs only, no file access — so it runs on every runtime the proxy runs on. |
 | `server.mjs` | Node runner. `node:http` plus Node 18+ globals. Streams SSE chunk by chunk. |
 | `tunnel.mjs` | Starts `server.mjs` plus a `cloudflared` tunnel, writes the tunnel address into `VITE_PROXY_URL` with the `gh` CLI, and triggers the Pages deployment. The self-hosted alternative to the Actions runner. |
+| `doc_service.py` | The document service: MarkItDown for documents, RapidOCR for pictures, pypdfium2 for scanned PDFs. Standard library only on the outside — the parsers are optional. |
+| `doc.mjs` | Starts the document service with whatever python the machine has (`python3`, `python`, or `py -3`). |
+| `requirements-doc.txt` | What the document service needs: `markitdown`, `rapidocr-onnxruntime`, `onnxruntime`, `pypdfium2`, `pillow`, `numpy`. |
+| `searxng/` | A self-hosted SearXNG for the search tool: `docker-compose.yml` and a `settings.yml` with the JSON API turned on. |
 | `deno.ts` | Deno Deploy entry point. |
 | `api/[...path].js` | Vercel entry point on the Node runtime. Strips the `/api` prefix the rewrite added, then writes the response back chunk by chunk. |
 | `vercel.json` | Vercel routing: every path is rewritten onto `/api`. |

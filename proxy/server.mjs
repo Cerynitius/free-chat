@@ -38,7 +38,25 @@ const env = {
   UPSTREAM: upstream,
   API_KEY: apiKey,
   ALLOWED_ORIGINS: allowedOrigins,
+  // 工具那一套
+  SEARXNG_URL: String(process.env.SEARXNG_URL || '').trim(),
+  BRAVE_API_KEY: String(process.env.BRAVE_API_KEY || '').trim(),
+  TAVILY_API_KEY: String(process.env.TAVILY_API_KEY || '').trim(),
+  DOC_URL: String(process.env.DOC_URL || 'http://127.0.0.1:8788').trim(),
 }
+
+/**
+ * 代理不许因为一个没接住的 promise 整个死掉。
+ *
+ * 这个进程在生产里是全站唯一的入口 —— 它一挂，站点就暗了。
+ * 所以这里把没接住的错误记下来，继续跑。
+ */
+process.on('unhandledRejection', (reason) => {
+  console.error('[proxy] 有个 promise 没人接（已忽略，进程继续跑）：', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[proxy] 未捕获的异常（已忽略，进程继续跑）：', err)
+})
 
 /** Node 的 IncomingMessage 转成 Web 的 Request。 */
 function toWebRequest(req) {
