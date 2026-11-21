@@ -2,11 +2,13 @@ import type { AppSet, UiSlice } from './types'
 
 export const uiSlice = (set: AppSet): UiSlice => ({
   sidebarOpen: false,
+  sidebarCollapsed: false,
   atBottom: true,
   unread: 0,
   toasts: [],
 
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
+  setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
   setAtBottom: (v) => set({ atBottom: v }),
   setUnread: (v) => set({ unread: v }),
 

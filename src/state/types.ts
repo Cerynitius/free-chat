@@ -51,6 +51,14 @@ export interface Message {
 export interface Conversation {
   id: string
   title: string
+  /** 置顶 —— 置顶的会话排在列表最上面，不跟着日期走 */
+  pinned: boolean
+  /**
+   * 标题是不是用户自己起的。
+   *
+   * 自动命名只在标题还「没人管」的时候出手 —— 用户手动改过就不许再被覆盖。
+   */
+  titleLocked?: boolean
   messages: Message[]
   createdAt: number
   updatedAt: number
@@ -87,19 +95,31 @@ export interface ChatSlice {
   newConversation: () => string
   selectConversation: (id: string) => void
   deleteConversation: (id: string) => void
+  /** 改会话名 —— 空名字等于「未命名会话」 */
+  renameConversation: (id: string, title: string) => void
+  /** 置顶 / 取消置顶 */
+  togglePin: (id: string) => void
   sendMessage: (text: string) => Promise<void>
   stopGeneration: () => void
   regenerate: (messageId: string) => Promise<void>
+  /**
+   * 改写一条用户消息：删掉它和它之后的全部对话，
+   * 用新内容替换，然后让模型重新回答这一轮。
+   */
+  editMessage: (messageId: string, text: string) => Promise<void>
 }
 
 export interface UiSlice {
   sidebarOpen: boolean
+  /** 桌面端侧边栏收起（手机上不管这个） */
+  sidebarCollapsed: boolean
   /** 是否贴底（滚到底了） */
   atBottom: boolean
   /** 用户往上滚之后又到的消息数 */
   unread: number
   toasts: Toast[]
   setSidebarOpen: (v: boolean) => void
+  setSidebarCollapsed: (v: boolean) => void
   setAtBottom: (v: boolean) => void
   setUnread: (v: number) => void
   pushToast: (t: Omit<Toast, 'id' | 'at'>) => void

@@ -12,6 +12,17 @@ interface Persisted {
   conversations: Conversation[]
   activeId: string | null
   settings: Settings
+  /** 桌面端侧边栏是不是收着的 */
+  sidebarCollapsed?: boolean
+}
+
+/**
+ * 空会话（一个消息都没发）不值得留在盘上 ——
+ * 下次进来直接开一个新的欢迎界面就行，攒一串空壳反而占地方。
+ * 置顶的空会话例外 —— 那是用户特意留的。
+ */
+function keepable(conversations: Conversation[]): Conversation[] {
+  return conversations.filter((c) => c.messages.length > 0 || c.pinned)
 }
 
 export function hydrate(store: {
@@ -26,10 +37,15 @@ export function hydrate(store: {
   })
 
   store.setState({
-    conversations: saved.conversations ?? [],
+    conversations: keepable(saved.conversations ?? []),
     activeId: saved.activeId ?? null,
     settings: { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) },
+    sidebarCollapsed: saved.sidebarCollapsed ?? false,
   })
+
+  // 每次进来都是「欢迎界面 + 一个新会话」——
+  // 上次聊到哪儿不该把人硬拽回去，想找随时在侧边栏里点。
+  store.getState().newConversation()
 
   let timer: number | null = null
   let warned = false
@@ -37,11 +53,14 @@ export function hydrate(store: {
   const persist = (): void => {
     const s = store.getState()
     // 只留最近 N 条，超出的从最旧的开始丢
-    const conversations = s.conversations.slice(0, MAX_CONVERSATIONS)
+    const conversations = keepable(s.conversations).slice(0, MAX_CONVERSATIONS)
+    // activeId 指向的会话要是没留下，就别存了 —— 免得下次进来指向一个不存在的会话
+    const activeId = conversations.some((c) => c.id === s.activeId) ? s.activeId : null
     const result = saveState({
       conversations,
-      activeId: s.activeId,
+      activeId,
       settings: s.settings,
+      sidebarCollapsed: s.sidebarCollapsed,
     })
     if (result === 'quota' && !warned) {
       warned = true
@@ -53,7 +72,12 @@ export function hydrate(store: {
   }
 
   store.subscribe((s, prev) => {
-    if (s.conversations === prev.conversations && s.activeId === prev.activeId && s.settings === prev.settings) {
+    if (
+      s.conversations === prev.conversations &&
+      s.activeId === prev.activeId &&
+      s.settings === prev.settings &&
+      s.sidebarCollapsed === prev.sidebarCollapsed
+    ) {
       return
     }
     if (timer !== null) window.clearTimeout(timer)

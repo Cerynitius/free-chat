@@ -50,6 +50,8 @@
   /* ── 阴影：只有一档，极淡 ─────────────────────────────── */
   --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-none: 0 0 0 rgba(0, 0, 0, 0);
+  /* 浮层（右键菜单）用 —— 得能跟底下的东西分开 */
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.13);
 
   /* ── 缓动 ─────────────────────────────────────────────── */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -84,6 +86,7 @@
   --color-yellow-ink: #d9b570;
 
   --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
@@ -351,6 +354,36 @@
   padding: 2px 0;
 }
 
+/* 段落里的独立公式：KaTeX 自己会给 .katex-display 加 display:block */
+.prose-chat .math-inline-display {
+  display: block;
+  overflow-x: auto;
+  padding: 2px 0;
+}
+
+/* KaTeX 解析不了时的退路 —— 等宽原文。
+   宁可丑，也不要一大坨红字：红字看起来像出错，等宽原文看起来像代码。 */
+.prose-chat .math-raw {
+  display: block;
+  overflow-x: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prose-chat code.math-raw {
+  padding: 0.1em 0.35em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ── 代码块 ─────────────────────────────────────────────────── */
 .code-block {
   border: 1px solid var(--color-line);
@@ -597,6 +630,51 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* ── 右键菜单 ───────────────────────────────────────────────── */
+.context-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 152px;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.context-menu__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--color-ink-2);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.12s var(--ease-out-expo),
+    color 0.12s var(--ease-out-expo);
+}
+
+.context-menu__item:hover,
+.context-menu__item--active {
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+}
+
+.context-menu__item--danger {
+  color: var(--color-red-ink);
+}
+
+.context-menu__item--danger:hover,
+.context-menu__item--danger.context-menu__item--active {
+  background: var(--color-red-soft);
+  color: var(--color-red-ink);
 }
 
 /* ── 打字光标 ───────────────────────────────────────────────── */

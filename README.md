@@ -16,9 +16,9 @@ A ready-to-use streaming chat client for `dsv4-flash`, with a collapsible reason
 <a id="intro"></a>
 ## Introduction
 
-**Hippocrene's Model Chat** is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer, in a fixed-height window that scrolls as the thinking grows.
+**Hippocrene's Model Chat** is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop that can be folded away, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer, in a fixed-height window that scrolls as the thinking grows.
 
-There is no configuration screen and no model picker. The origin URL, the model id, the API key, the sampling parameters, and the default reasoning effort all live in `src/config.ts`, which is the single source of truth. Only two things stay adjustable at runtime: the theme and the reasoning effort.
+There is no configuration screen and no model picker. The origin URL, the model id, the API key, the sampling parameters, and the default reasoning effort all live in `src/config.ts`, which is the single source of truth. Only three things stay adjustable at runtime: the theme, the reasoning effort, and whether the sidebar is folded.
 
 The upstream speaks the OpenAI chat-completions protocol over Server-Sent Events and is perfectly usable from `curl`, but it serves no CORS headers at all, so a browser page cannot talk to it directly. The repository therefore ships a zero-dependency reverse proxy in `proxy/` that fixes the three things a browser needs: it answers the CORS preflight itself, injects the API key from the server side, and streams the SSE response through untouched.
 
@@ -38,11 +38,12 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Context | Full multi-turn history is sent back with every request |
 | Markdown | GitHub Flavored Markdown including tables, rendered through `markdown-it` and sanitized with DOMPurify |
 | Code | Syntax highlighting for 14 languages, with a working copy button on every code block |
-| Math | KaTeX rendering for inline `$...$` and display `$$...$$` formulas |
-| Actions | Regenerate an answer, stop generation mid-flight, copy an answer |
-| History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; new and delete are supported |
+| Math | KaTeX rendering for inline `$...$`, display `$$...$$`, and the LaTeX-native `\(...\)` and `\[...\]`; a formula KaTeX cannot parse falls back to monospaced source instead of a wall of red |
+| Actions | Regenerate an answer, stop generation mid-flight, copy an answer as plain text or as Markdown, and rewrite a question — editing it drops the whole round that followed and asks again |
+| History | Conversations are stored locally and grouped by today, yesterday, this week, and earlier; each one is named automatically, can be renamed and pinned, and offers rename / pin / delete from a right-click menu |
 | Themes | Light, dark, or follow the system preference, driven by a single icon button at the bottom of the sidebar |
-| Layout | Persistent sidebar on desktop, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
+| Layout | Persistent sidebar on desktop that can be folded away, drawer on phones, soft-keyboard aware on mobile through `visualViewport` |
+| Welcome | Every visit opens on a fresh conversation; the previous ones are one click away in the sidebar |
 | Responsive | One layout that adapts from narrow phones to wide desktops |
 
 Deliberately out of scope: tool calling (the server does not support it), image input (the API has no vision capability), and multi-model switching (there is a single model).
@@ -440,12 +441,13 @@ The deployment publishes static files only. It does not proxy the API, does not 
 <a id="settings"></a>
 ## Adjustable Options
 
-There is no configuration screen. Two options are adjustable at runtime, and both are reachable directly from the interface:
+There is no configuration screen. Three options are adjustable at runtime, and all of them are reachable directly from the interface:
 
 | Option | Default | Where | Description |
 |---|---|---|---|
 | Theme | `system` | Icon button at the bottom of the sidebar | `light`, `dark`, or follow the operating system. The button flips between light and dark. |
 | Reasoning effort | `low` | Chip at the bottom-left of the composer | One of `off`, `none`, `low`, `high`, `max`. Sent as `reasoning_effort` with every request. |
+| Sidebar fold | unfolded | Icon button at the top-left of the main area | Folds the desktop sidebar away. Remembered across visits. |
 
 Everything else is hardcoded in `src/config.ts` and is not editable in the interface: the origin URL, the proxy URL, the API key, the model id, `temperature`, `top_p`, `max_tokens`, and the system prompt. Changing any of them means editing that one file and rebuilding.
 
@@ -496,10 +498,10 @@ Latin text and numerals use Geist, CJK falls back to the system font, and both a
 |---|---|---|
 | Border | `1px solid #EAEAEA` | Every outline in the interface uses this one hairline. |
 | Radius | 4, 6, 8, 12 px | Large containers stop at 12 pixels. The pill radius is reserved for small tags. |
-| Shadow | `0 2px 8px rgba(0, 0, 0, 0.04)` | The only elevation level in the system. |
+| Shadow | `0 2px 8px rgba(0, 0, 0, 0.04)` | The card elevation level. Floating layers, such as the right-click menu, use one stronger step: `0 8px 28px rgba(0, 0, 0, 0.13)`. |
 | Primary action | `#111111` background, white text, radius 4 to 6 pixels, no shadow | Pressed state is `transform: scale(0.98)`. |
 | Easing | `cubic-bezier(0.16, 1, 0.3, 1)` | Applied to every transition. |
-| Animation | `transform` and `opacity` only | Nothing animates width, height, or colour. |
+| Animation | `transform` and `opacity` only | Two sizes do move, both under 250 ms: the reasoning window unfolds by `max-height`, and the sidebar folds by `width`. |
 
 No gradients, no glow, no glassmorphism, and no emoji anywhere in the interface. Icons come from Phosphor in the Bold and Fill weights only.
 

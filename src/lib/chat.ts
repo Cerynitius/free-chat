@@ -124,3 +124,66 @@ export function describeTruncation(outcome: ChatOutcome): Truncation | undefined
   }
   return undefined
 }
+
+/** 起标题的请求超时（毫秒）—— 起个名而已，不值得等太久 */
+const TITLE_TIMEOUT_MS = 12_000
+
+/**
+ * 让模型给这段对话起个名。
+ *
+ * 跟正文分开走：关思考、限字数、限时间。
+ * 失败就返回 null —— 调用方退回本地抠出来的标题，界面永远有名字。
+ */
+export async function fetchTitle(source: string, signal?: AbortSignal): Promise<string | null> {
+  const ctrl = new AbortController()
+  const timer = window.setTimeout(() => ctrl.abort(), TITLE_TIMEOUT_MS)
+  const onAbort = (): void => ctrl.abort()
+  signal?.addEventListener('abort', onAbort)
+
+  try {
+    const body = {
+      model: MODEL,
+      messages: [
+        {
+          role: 'user' as const,
+          content:
+            '给下面这段对话起一个简短的标题，只输出标题本身，不要引号、标点和解释，最多 20 个字：\n\n' +
+            source.slice(0, 2000),
+        },
+      ],
+      // ★ 这个后端强制要求 stream:true
+      stream: true,
+      reasoning_effort: 'off',
+      temperature: 0.3,
+      top_p: 1,
+      max_tokens: 64,
+    }
+
+    const res = await fetch(chatEndpoint(), {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) return null
+
+    let out = ''
+    for await (const frame of readSSE(res)) {
+      if (frame === '[DONE]') break
+      try {
+        const chunk = JSON.parse(frame) as ChatChunk
+        const piece = chunk.choices?.[0]?.delta?.content
+        if (piece) out += piece
+      } catch {
+        continue // 坏帧跳过
+      }
+      if (out.length > 120) break // 起个名而已，够了
+    }
+    return out.trim() || null
+  } catch {
+    return null // 起名失败不是错误 —— 有兜底标题
+  } finally {
+    window.clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
+}

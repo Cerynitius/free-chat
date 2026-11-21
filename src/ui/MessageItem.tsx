@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { ArrowClockwise, Check, Copy, WarningCircle } from '@phosphor-icons/react'
+import { ArrowClockwise, Check, Copy, PencilSimple, WarningCircle } from '@phosphor-icons/react'
 import type { Message, TruncationKind } from '@/state/types'
 import { copyText } from '@/lib/clipboard'
+import { markdownToText } from '@/lib/plain'
+import { CopyMenu } from './CopyMenu'
 import { Markdown } from './Markdown'
 import { ReasoningPanel } from './ReasoningPanel'
 
@@ -9,6 +11,8 @@ interface Props {
   message: Message
   streaming: boolean
   onRegenerate: () => void
+  /** 用户消息：进入编辑模式（改写这一轮） */
+  onEdit: (message: Message) => void
 }
 
 /** 截断的三种来由，各自怎么解释 —— 别让半个回答装作完整回答。 */
@@ -31,10 +35,11 @@ export function MessageItem({
   message,
   streaming,
   onRegenerate,
+  onEdit,
 }: Props): React.ReactElement {
   const [copied, setCopied] = useState(false)
 
-  const onCopy = async (): Promise<void> => {
+  const onCopyQuestion = async (): Promise<void> => {
     const ok = await copyText(message.content)
     if (!ok) return
     setCopied(true)
@@ -43,9 +48,31 @@ export function MessageItem({
 
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end">
+      <div className="group flex flex-col items-end gap-1.5">
         <div className="max-w-[85%] rounded-lg border border-line bg-surface-2 px-4 py-2.5 text-[15px] leading-[1.6] text-ink-2 whitespace-pre-wrap sm:max-w-[75%]">
           {message.content}
+        </div>
+
+        <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          {/* 改写这一轮：删掉后面所有对话，用新问题重新问 */}
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            onClick={() => onEdit(message)}
+            aria-label="编辑问题"
+            title="编辑问题（重写这一轮）"
+          >
+            <PencilSimple size={15} weight="bold" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            onClick={() => void onCopyQuestion()}
+            aria-label={copied ? '已复制' : '复制问题'}
+            title={copied ? '已复制' : '复制问题'}
+          >
+            {copied ? <Check size={15} weight="bold" /> : <Copy size={15} weight="bold" />}
+          </button>
         </div>
       </div>
     )
@@ -102,15 +129,8 @@ export function MessageItem({
 
       {!streaming && message.content.trim() && (
         <div className="mt-3 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={onCopy}
-            aria-label={copied ? '已复制' : '复制回答'}
-            title={copied ? '已复制' : '复制回答'}
-          >
-            {copied ? <Check size={15} weight="bold" /> : <Copy size={15} weight="bold" />}
-          </button>
+          {/* 直接复制（纯文本）+ 复制为 Markdown */}
+          <CopyMenu text={markdownToText(message.content)} markdown={message.content} label="复制回答" />
           <button
             type="button"
             className="btn btn-ghost btn-icon"

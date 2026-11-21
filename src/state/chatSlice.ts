@@ -1,6 +1,7 @@
 import type { AppGet, AppSet, ChatSlice, Conversation, Message, Role } from './types'
 import { ApiError } from '@/lib/api'
-import { describeTruncation, runChat } from '@/lib/chat'
+import { describeTruncation, fetchTitle, runChat } from '@/lib/chat'
+import { cleanTitle, deriveTitle } from '@/lib/title'
 
 function uid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -68,6 +69,24 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
               messages: c.messages.map((m) => (m.id === msgId ? { ...m, ...patch } : m)),
             }
           : c,
+      ),
+    }))
+  }
+
+  /**
+   * 自动命名：正文跑完了，让模型起一个更像样的名字。
+   *
+   * 放在正文**之后**是有意的 —— 起名请求跟正文抢上游的话，
+   * 回答本身会被拖慢。名字晚一步出现没关系，界面上早就有本地兜底名。
+   */
+  const refineTitle = async (convId: string, source: string): Promise<void> => {
+    const raw = await fetchTitle(source)
+    if (!raw) return
+    const title = cleanTitle(raw)
+    if (!title) return
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === convId && !c.titleLocked ? { ...c, title } : c,
       ),
     }))
   }
@@ -157,19 +176,6 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
             : undefined,
         truncated,
       })
-
-      // 标题：取第一条 user 消息的前 24 个字
-      const conv = get().conversations.find((c) => c.id === convId)
-      if (conv && !conv.title) {
-        const first = conv.messages.find((m) => m.role === 'user')
-        if (first) {
-          set((s) => ({
-            conversations: s.conversations.map((c) =>
-              c.id === convId ? { ...c, title: first.content.slice(0, 24) } : c,
-            ),
-          }))
-        }
-      }
     } catch (err) {
       if (timer !== null) {
         window.clearTimeout(timer)
@@ -204,10 +210,22 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     streamingId: null,
 
     newConversation: () => {
+      const s = get()
+      const cur = s.conversations.find((c) => c.id === s.activeId)
+      // 当前这个还是空的 ⇒ 直接用它，别堆一串空会话
+      if (cur && cur.messages.length === 0 && !cur.title) return cur.id
+
       const id = uid()
       const now = Date.now()
-      const conv: Conversation = { id, title: '', messages: [], createdAt: now, updatedAt: now }
-      set((s) => ({ conversations: [conv, ...s.conversations], activeId: id }))
+      const conv: Conversation = {
+        id,
+        title: '',
+        pinned: false,
+        messages: [],
+        createdAt: now,
+        updatedAt: now,
+      }
+      set((st) => ({ conversations: [conv, ...st.conversations], activeId: id }))
       return id
     },
 
@@ -216,13 +234,37 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
     deleteConversation: (id) =>
       set((s) => {
         const conversations = s.conversations.filter((c) => c.id !== id)
-        return {
-          conversations,
-          activeId: s.activeId === id ? (conversations[0]?.id ?? null) : s.activeId,
+        if (s.activeId !== id) return { conversations }
+        if (conversations.length > 0) return { conversations, activeId: conversations[0].id }
+        // 一个都不剩 ⇒ 立刻开一个新的空会话（别把用户晾在空白页上）
+        const now = Date.now()
+        const fresh: Conversation = {
+          id: uid(),
+          title: '',
+          pinned: false,
+          messages: [],
+          createdAt: now,
+          updatedAt: now,
         }
+        return { conversations: [fresh], activeId: fresh.id }
       }),
 
+    renameConversation: (id, title) =>
+      set((s) => ({
+        conversations: s.conversations.map((c) =>
+          c.id === id
+            ? // 手动改过的标题，自动命名就不许再覆盖了
+              { ...c, title: cleanTitle(title), titleLocked: true }
+            : c,
+        ),
+      })),
 
+    togglePin: (id) =>
+      set((s) => ({
+        conversations: s.conversations.map((c) =>
+          c.id === id ? { ...c, pinned: !c.pinned } : c,
+        ),
+      })),
 
     sendMessage: async (text) => {
       const trimmed = text.trim()
@@ -246,13 +288,16 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
 
       const conv = get().conversations.find((c) => c.id === convId)
       const history = conv ? [...conv.messages, userMsg] : [userMsg]
+      // 这是不是这个会话的第一句话？—— 是的话才有「自动命名」这回事
+      const isFirst = !conv || conv.messages.length === 0
 
       set((s) => ({
         conversations: s.conversations.map((c) =>
           c.id === convId
             ? {
                 ...c,
-                title: c.title || trimmed.slice(0, 24),
+                // 自动命名：先本地抠一个顶上（界面上永远有名字），模型版随后覆盖
+                title: c.title || deriveTitle(trimmed),
                 updatedAt: now,
                 messages: [...c.messages, userMsg],
               }
@@ -261,6 +306,12 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       }))
 
       await generate(convId, history)
+
+      // 正文跑完了，再让模型起个更像样的名字（用户自己改过的不动）
+      if (isFirst) {
+        const after = get().conversations.find((c) => c.id === convId)
+        if (after && !after.titleLocked) void refineTitle(convId, trimmed)
+      }
     },
 
     /**
@@ -281,6 +332,51 @@ export const chatSlice = (set: AppSet, get: AppGet): ChatSlice => {
       }))
 
       await generate(conv.id, keep)
+    },
+
+    /**
+     * 改写一条用户消息。
+     *
+     * 「重写」的意思是：这一轮之后的东西全部作废 ——
+     * 旧的问题、旧的回答、旧的后续，全删掉，用新问题重新问一遍。
+     */
+    editMessage: async (messageId, text) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      if (get().streamingId) return
+
+      const conv = get().conversations.find((c) => c.messages.some((m) => m.id === messageId))
+      if (!conv) return
+      const idx = conv.messages.findIndex((m) => m.id === messageId)
+      if (idx < 0) return
+      if (conv.messages[idx].role !== 'user') return
+
+      const now = Date.now()
+      const edited: Message = { ...conv.messages[idx], content: trimmed, createdAt: now }
+      // 只留这一轮之前的消息 + 改过的那条 —— 后面的全部作废
+      const history = [...conv.messages.slice(0, idx), edited]
+      const isFirst = idx === 0
+
+      set((st) => ({
+        conversations: st.conversations.map((c) =>
+          c.id === conv.id
+            ? {
+                ...c,
+                messages: history,
+                updatedAt: now,
+                // 改的是第一条问题 ⇒ 名字也跟着重抠一遍
+                title: isFirst && !c.titleLocked ? deriveTitle(trimmed) : c.title,
+              }
+            : c,
+        ),
+      }))
+
+      await generate(conv.id, history)
+
+      if (isFirst) {
+        const after = get().conversations.find((c) => c.id === conv.id)
+        if (after && !after.titleLocked) void refineTitle(conv.id, trimmed)
+      }
     },
 
     stopGeneration: () => {

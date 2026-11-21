@@ -1,7 +1,7 @@
 /**
  * localStorage 读写。
  *
- * 只存三样东西：会话列表、当前会话 id、设置。
+ * 只存四样东西：会话列表、当前会话 id、设置、侧边栏收起状态。
  * 不存 AbortController、连接状态、toast —— 那些是运行时状态，刷新就该没了。
  */
 
@@ -11,6 +11,8 @@ export interface PersistedState {
   conversations: unknown[]
   activeId: string | null
   settings: unknown
+  /** 桌面端侧边栏是不是收着的 */
+  sidebarCollapsed?: boolean
 }
 
 export function loadState<T>(fallback: T): T {
