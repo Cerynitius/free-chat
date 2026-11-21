@@ -252,7 +252,7 @@ export function SettingsDialog(): React.ReactElement | null {
           <section>
             <h3 className="settings-h">数据</h3>
             <p className="mb-2 text-[12px] leading-[1.6] text-muted">
-              会话只保存在这个浏览器里（IndexedDB），不会上传到任何服务器。换设备或清理浏览器数据之前，先导出一份备份。
+              聊天记录只保存在这个浏览器里（IndexedDB）。发出的消息会经过服务器交给模型生成回答，服务器不保存聊天记录，只留 1 小时的输入日志用于排查故障。换设备或清理浏览器数据之前，先导出一份备份。
             </p>
             <div className="storage-meter">
               <HardDrives size={16} weight="bold" className="shrink-0 text-muted" />
