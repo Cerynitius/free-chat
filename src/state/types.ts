@@ -142,11 +142,15 @@ export interface Conversation {
  */
 export type FontSize = 'sm' | 'md' | 'lg'
 
+/** 界面风格：网页对话（暖色纸面、衬线正文）或终端（等宽、命令行式） */
+export type UiStyle = 'web' | 'terminal'
+
 /** 发送键：Enter 发送（Shift+Enter 换行），或 Ctrl/⌘+Enter 发送（Enter 换行） */
 export type SendKey = 'enter' | 'mod-enter'
 
 export interface Settings {
   theme: ThemeMode
+  uiStyle: UiStyle
   effort: ReasoningEffort
   /** 工具（搜索 / 抓页面 / 读文件 / 认字）要不要开着 */
   tools: boolean

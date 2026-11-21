@@ -1150,3 +1150,642 @@ html[data-font-size='lg'] {
     display: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   界面风格（html[data-ui]）：网页对话 web / 终端 terminal
+   这里的规则不在任何 @layer 里，所以压得过 Tailwind 的工具类。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 只在终端风格出现的零件 */
+.topbar__title,
+.composer__prompt,
+.composer__hint {
+  display: none;
+}
+.term-accent {
+  color: var(--accent);
+}
+.term-dim {
+  color: var(--color-faint);
+}
+.term-ink {
+  color: var(--color-ink);
+}
+
+/* ─────────────────────────── 网页对话 ─────────────────────────── */
+html[data-ui='web'] {
+  --color-canvas: #faf9f5;
+  --color-canvas-2: #f5f4ed;
+  --color-canvas-3: #f8f7f2;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0eee6;
+  --color-line: #e6e3d9;
+  --color-line-soft: rgba(31, 30, 29, 0.08);
+  --color-ink: #141413;
+  --color-ink-2: #3d3d3a;
+  --color-muted: #73726c;
+  --color-faint: #a3a19a;
+  --color-paper-1: #faf9f5;
+  --color-paper-2: #f5f4ed;
+  --color-gold: #c96442;
+  --accent: #c96442;
+  --accent-hover: #b4553a;
+  --accent-ink: #ffffff;
+  --row-active: #ebe9e0;
+  --font-reply: 'Newsreader Variable', 'Newsreader', Georgia, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', serif;
+  --text-body: 16px;
+  --text-body--line-height: 1.7;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+html.dark[data-ui='web'] {
+  --color-canvas: #262624;
+  --color-canvas-2: #1f1e1d;
+  --color-canvas-3: #2a2a28;
+  --color-surface: #30302e;
+  --color-surface-2: #1f1e1d;
+  --color-line: #3e3e3a;
+  --color-line-soft: rgba(255, 255, 255, 0.07);
+  --color-ink: #faf9f5;
+  --color-ink-2: #e5e3db;
+  --color-muted: #a6a39a;
+  --color-faint: #75736c;
+  --color-paper-1: #262624;
+  --color-paper-2: #1f1e1d;
+  --color-gold: #d97757;
+  --accent: #d97757;
+  --accent-hover: #e08a6d;
+  --accent-ink: #1f1e1d;
+  --row-active: #34332f;
+}
+html[data-ui='web'][data-font-size='sm'] {
+  --text-body: 15px;
+}
+html[data-ui='web'][data-font-size='lg'] {
+  --text-body: 18px;
+}
+
+html[data-ui='web'] .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+html[data-ui='web'] .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--accent-ink);
+}
+html[data-ui='web'] :focus-visible {
+  outline-color: var(--accent);
+}
+
+/* 侧栏：比正文区暗半度的纸色 */
+html[data-ui='web'] .sidebar {
+  background: var(--color-canvas-2);
+}
+html[data-ui='web'] .sidebar__brand {
+  font-size: 18px;
+  letter-spacing: -0.015em;
+}
+html[data-ui='web'] .sidebar__row {
+  border-radius: 8px;
+}
+html[data-ui='web'] .sidebar__row.is-active {
+  background: var(--row-active);
+}
+
+/* 消息：用户是右侧暖灰气泡，回答是衬线正文 */
+html[data-ui='web'] .msg-user__bubble {
+  border: 0;
+  border-radius: 18px;
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+  padding: 10px 16px;
+}
+html.dark[data-ui='web'] .msg-user__bubble {
+  background: #141413;
+}
+html[data-ui='web'] .msg--assistant .prose-chat {
+  font-family: var(--font-reply);
+}
+html[data-ui='web'] .msg--assistant .prose-chat code,
+html[data-ui='web'] .msg--assistant .prose-chat pre {
+  font-family: var(--font-mono);
+}
+html[data-ui='web'] .prose-chat h1,
+html[data-ui='web'] .prose-chat h2,
+html[data-ui='web'] .prose-chat h3,
+html[data-ui='web'] .prose-chat h4 {
+  font-family: var(--font-reply);
+  font-weight: 600;
+}
+html[data-ui='web'] .caret::after {
+  background: var(--accent);
+}
+
+/* 思考：不装框，一行可展开的灰字，正文用左边一条细线托着 */
+html[data-ui='web'] .reasoning {
+  border: 0;
+  background: transparent;
+}
+html[data-ui='web'] .reasoning__head {
+  padding-left: 0;
+}
+html[data-ui='web'] .reasoning__scroll {
+  border-left: 2px solid var(--color-line);
+  margin-left: 6px;
+}
+html[data-ui='web'] .reasoning__dot {
+  background: var(--accent);
+}
+
+html[data-ui='web'] .tool-card {
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+html.dark[data-ui='web'] .tool-card {
+  background: var(--color-canvas-3);
+}
+html[data-ui='web'] .code-block {
+  border-radius: 10px;
+}
+
+/* 输入框：大圆角卡片 + 一层很淡的影子，没有分隔线 */
+html[data-ui='web'] .composer {
+  border-top: 0;
+  background: transparent;
+}
+html[data-ui='web'] .composer__box {
+  border-radius: 20px;
+  border-color: var(--color-line);
+  box-shadow: 0 4px 22px rgba(20, 20, 19, 0.05);
+  padding: 4px 4px 0;
+}
+html[data-ui='web'] .composer__box:focus-within {
+  border-color: var(--color-faint);
+}
+html.dark[data-ui='web'] .composer__box {
+  background: var(--color-surface);
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.25);
+}
+html[data-ui='web'] .composer__bar .btn-primary.btn-icon {
+  border-radius: 10px;
+}
+html[data-ui='web'] .composer .tag {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  background: transparent;
+  padding: 3px 10px;
+}
+
+/* 新会话：问候 + 输入框一起居中，聊起来以后输入框回到底部 */
+html[data-ui='web'] .is-empty .chat-body {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+html[data-ui='web'] .is-empty .composer {
+  margin-bottom: auto;
+  padding-bottom: 14vh;
+}
+html[data-ui='web'] .welcome {
+  flex: none;
+  background: none;
+  padding: 0 1.5rem 22px;
+}
+html[data-ui='web'] .welcome__inner {
+  flex-direction: row;
+  gap: 14px;
+  animation: web-welcome-in 0.6s var(--ease-out-expo) both;
+}
+html[data-ui='web'] .welcome__title {
+  font-family: var(--font-reply);
+  font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  text-align: center;
+}
+.welcome__mark {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.welcome__mark::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  opacity: 0.35;
+}
+@keyframes web-welcome-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (max-width: 640px) {
+  html[data-ui='web'] .welcome__mark {
+    display: none;
+  }
+  html[data-ui='web'] .is-empty .composer {
+    padding-bottom: 6vh;
+  }
+}
+
+/* ─────────────────────────── 终端 ─────────────────────────── */
+html[data-ui='terminal'] {
+  --color-canvas: #fbfbfa;
+  --color-canvas-2: #f3f3f1;
+  --color-canvas-3: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #efefec;
+  --color-line: #d9d9d5;
+  --color-line-soft: rgba(0, 0, 0, 0.07);
+  --color-ink: #1c1c1c;
+  --color-ink-2: #333333;
+  --color-muted: #6f6f6f;
+  --color-faint: #a0a09c;
+  --color-green-ink: #3f7d20;
+  --color-red-ink: #b3412f;
+  --color-yellow-ink: #8a6100;
+  --accent: #c15f3c;
+  --accent-hover: #a94f30;
+  --accent-ink: #ffffff;
+  --text-body: 14px;
+  --text-body--line-height: 1.65;
+  --radius-xs: 0px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-pill: 3px;
+}
+html.dark[data-ui='terminal'] {
+  --color-canvas: #171717;
+  --color-canvas-2: #1c1c1c;
+  --color-canvas-3: #1a1a1a;
+  --color-surface: #1f1f1f;
+  --color-surface-2: #2a2a2a;
+  --color-line: #3a3a3a;
+  --color-line-soft: rgba(255, 255, 255, 0.08);
+  --color-ink: #ececec;
+  --color-ink-2: #d0d0d0;
+  --color-muted: #8f8f8f;
+  --color-faint: #616161;
+  --color-green-ink: #8cc265;
+  --color-red-ink: #e5776f;
+  --color-yellow-ink: #e5c07b;
+  --accent: #d77757;
+  --accent-hover: #e38a6c;
+  --accent-ink: #171717;
+}
+html[data-ui='terminal'][data-font-size='sm'] {
+  --text-body: 13px;
+}
+html[data-ui='terminal'][data-font-size='lg'] {
+  --text-body: 15.5px;
+}
+
+/* 全站等宽（KaTeX 自己指定字体，不受影响） */
+html[data-ui='terminal'] body,
+html[data-ui='terminal'] :is(h1, h2, h3, h4, button, input, textarea, kbd, .font-serif, .prose-chat) {
+  font-family: var(--font-mono);
+}
+html[data-ui='terminal'] .prose-chat h1,
+html[data-ui='terminal'] .prose-chat h2,
+html[data-ui='terminal'] .prose-chat h3,
+html[data-ui='terminal'] .prose-chat h4 {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+html[data-ui='terminal'] .prose-chat h1::before {
+  content: '# ';
+  color: var(--accent);
+}
+html[data-ui='terminal'] .prose-chat h2::before {
+  content: '## ';
+  color: var(--accent);
+}
+html[data-ui='terminal'] .prose-chat h3::before {
+  content: '### ';
+  color: var(--accent);
+}
+html[data-ui='terminal'] .prose-chat code {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0;
+  font-size: 1em;
+}
+html[data-ui='terminal'] .prose-chat pre code {
+  color: inherit;
+}
+html[data-ui='terminal'] ::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+html[data-ui='terminal'] :focus-visible {
+  outline: 1px dashed var(--accent);
+}
+
+html[data-ui='terminal'] .btn-primary {
+  background: transparent;
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+html[data-ui='terminal'] .btn-primary:hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 侧栏：一列等宽文字，当前那条用 › 标出来 */
+html[data-ui='terminal'] .sidebar {
+  background: var(--color-canvas-2);
+}
+html[data-ui='terminal'] .sidebar__brand {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+html[data-ui='terminal'] .sidebar__brand::before {
+  content: '❯ ';
+  color: var(--accent);
+}
+html[data-ui='terminal'] .sidebar__row {
+  position: relative;
+  padding-left: 18px;
+  font-size: 12.5px;
+}
+html[data-ui='terminal'] .sidebar__row.is-active {
+  background: transparent;
+  color: var(--accent);
+}
+html[data-ui='terminal'] .sidebar__row.is-active::before {
+  content: '›';
+  position: absolute;
+  left: 6px;
+  color: var(--accent);
+}
+html[data-ui='terminal'] .sidebar-search {
+  border-radius: 3px;
+}
+
+/* 顶栏：像终端窗口的标题 */
+html[data-ui='terminal'] .topbar {
+  border-bottom: 1px solid var(--color-line);
+}
+html[data-ui='terminal'] .topbar__title {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted);
+  text-align: center;
+  padding-right: 64px;
+}
+
+/* 消息：> 是你说的，⏺ 是它说的 */
+html[data-ui='terminal'] .msg--user {
+  align-items: stretch;
+}
+html[data-ui='terminal'] .msg-user__bubble {
+  max-width: none;
+  border: 0;
+  border-left: 2px solid var(--color-faint);
+  border-radius: 0;
+  background: var(--color-surface-2);
+  color: var(--color-ink-2);
+  padding: 6px 12px 6px 10px;
+  font-size: var(--text-body);
+}
+html[data-ui='terminal'] .msg-user__bubble::before {
+  content: '> ';
+  color: var(--color-muted);
+}
+html[data-ui='terminal'] .msg-actions {
+  align-self: flex-start;
+}
+html[data-ui='terminal'] .msg--assistant {
+  position: relative;
+  padding-left: 2.2ch;
+}
+html[data-ui='terminal'] .msg-body::before,
+html[data-ui='terminal'] .msg-waiting::before {
+  content: '⏺';
+  position: absolute;
+  left: 0;
+  color: var(--color-ink);
+  font-size: 0.9em;
+  line-height: calc(var(--text-body) * var(--text-body--line-height));
+}
+html[data-ui='terminal'] .msg-waiting::before {
+  color: var(--accent);
+  animation: term-pulse 1s ease-in-out infinite;
+  line-height: inherit;
+}
+html[data-ui='terminal'] .msg-waiting__dot {
+  display: none;
+}
+html[data-ui='terminal'] .caret::after {
+  width: 0.6em;
+  background: var(--color-ink);
+  opacity: 0.75;
+}
+
+/* 工具：⏺ 名字(参数) / ⎿ 结果 */
+html[data-ui='terminal'] .tool-card {
+  margin-left: -2.2ch;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+html[data-ui='terminal'] .tool-card__head {
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+  font-size: var(--text-body);
+}
+html[data-ui='terminal'] .tool-card__head:hover {
+  background: transparent;
+}
+html[data-ui='terminal'] .tool-card__head::before {
+  content: '⏺';
+  width: 2.2ch;
+  flex: none;
+  font-size: 0.9em;
+  color: var(--color-green-ink);
+}
+html[data-ui='terminal'] .tool-card[data-status='running'] .tool-card__head::before {
+  color: var(--accent);
+  animation: term-pulse 1s ease-in-out infinite;
+}
+html[data-ui='terminal'] .tool-card[data-status='error'] .tool-card__head::before {
+  color: var(--color-red-ink);
+}
+html[data-ui='terminal'] .tool-card__icon {
+  display: none;
+}
+html[data-ui='terminal'] .tool-card__label {
+  font-weight: 700;
+  color: var(--color-ink);
+}
+html[data-ui='terminal'] .tool-card__args {
+  flex: 0 1 auto;
+  color: var(--color-ink-2);
+}
+html[data-ui='terminal'] .tool-card__args::before {
+  content: '(';
+}
+html[data-ui='terminal'] .tool-card__args::after {
+  content: ')';
+}
+html[data-ui='terminal'] .tool-card__state {
+  flex-basis: 100%;
+  padding-left: 2.2ch;
+  font-size: 0.92em;
+  color: var(--color-muted);
+}
+html[data-ui='terminal'] .tool-card__state::before {
+  content: '⎿  ';
+  color: var(--color-faint);
+}
+html[data-ui='terminal'] .tool-card__detail {
+  margin: 4px 0 2px 4.4ch;
+  border: 0;
+  border-left: 1px solid var(--color-line);
+  padding: 2px 0 2px 10px;
+}
+
+/* 思考：✻ 一行，展开是缩进的灰字 */
+html[data-ui='terminal'] .reasoning {
+  margin-left: -2.2ch;
+  border: 0;
+  background: transparent;
+}
+html[data-ui='terminal'] .reasoning__head {
+  padding: 0;
+  gap: 0;
+  font-size: var(--text-body);
+}
+html[data-ui='terminal'] .reasoning__head::before {
+  content: '✻';
+  width: 2.2ch;
+  flex: none;
+  color: var(--accent);
+}
+html[data-ui='terminal'] .reasoning__caret-icon,
+html[data-ui='terminal'] .reasoning__icon {
+  display: none;
+}
+html[data-ui='terminal'] .reasoning__dot {
+  margin-left: 8px;
+  background: var(--accent);
+}
+html[data-ui='terminal'] .reasoning__check {
+  margin-left: 8px;
+}
+html[data-ui='terminal'] .reasoning__scroll {
+  padding: 4px 0 4px 2.2ch;
+  color: var(--color-faint);
+  font-size: 0.92em;
+}
+
+html[data-ui='terminal'] .code-block {
+  border-radius: 0;
+  border-color: var(--color-line);
+}
+html[data-ui='terminal'] .code-block__head {
+  background: transparent;
+}
+
+/* 输入框：一个圆角框 + > 提示符，下面一行按键提示 */
+html[data-ui='terminal'] .composer {
+  border-top: 0;
+}
+html[data-ui='terminal'] .composer__box {
+  border-radius: 6px;
+  border-color: var(--color-faint);
+  background: transparent;
+}
+html[data-ui='terminal'] .composer__box:focus-within {
+  border-color: var(--color-muted);
+}
+html[data-ui='terminal'] .composer__prompt {
+  display: block;
+  padding: 11px 0 0 12px;
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  line-height: 1.7;
+}
+html[data-ui='terminal'] .composer__row textarea {
+  font-size: var(--text-body);
+  padding-left: 8px;
+}
+html[data-ui='terminal'] .composer .tag {
+  border: 0;
+  background: transparent;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 2px 4px;
+}
+html[data-ui='terminal'] .composer__hint {
+  display: flex;
+  gap: 12px;
+  padding: 5px 4px 0;
+  font-size: 11.5px;
+  color: var(--color-faint);
+}
+
+/* 欢迎框 */
+.term-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--color-ink-2);
+}
+.term-welcome__box {
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 14px 18px;
+}
+.term-welcome__title {
+  margin-bottom: 8px;
+  color: var(--color-ink);
+}
+.term-welcome__line {
+  color: var(--color-muted);
+}
+.term-welcome__tips {
+  padding-left: 4px;
+}
+
+@keyframes term-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui='terminal'] .msg-waiting::before,
+  html[data-ui='terminal'] .tool-card[data-status='running'] .tool-card__head::before,
+  html[data-ui='web'] .welcome__inner {
+    animation: none;
+  }
+}
+
+/* 触屏：Enter 是换行、没有快捷键 —— 终端风格那一行按键提示不显示 */
+@media (pointer: coarse) {
+  html[data-ui='terminal'] .composer__hint {
+    display: none;
+  }
+}

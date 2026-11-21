@@ -16,6 +16,9 @@ import { applyTheme } from '@/lib/theme'
  * 所以这一行能赶在首帧之前把 dark class 挂好 —— 否则深色用户会先看到一帧白底。
  */
 applyTheme(useApp.getState().settings.theme)
+// 界面风格和字号同理：首帧之前就定下来，不闪
+document.documentElement.dataset.ui = useApp.getState().settings.uiStyle
+document.documentElement.dataset.fontSize = useApp.getState().settings.fontSize
 
 const container = document.getElementById('root')
 if (!container) throw new Error('找不到 #root 挂载点')
