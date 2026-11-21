@@ -16,7 +16,7 @@ A ready-to-use streaming chat client for `dsv4-flash`, with a collapsible reason
 <a id="intro"></a>
 ## Introduction
 
-**Hippocrene's Model Chat** is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer.
+**Hippocrene's Model Chat** is a single-page chat client built for exactly one model: `dsv4-flash` (DeepSeek-V4-Flash-0731-CRACK) at `https://182.92.245.176:1920`. It is styled after DeepSeek.com: a persistent sidebar on the desktop, a drawer on the phone, a blinking caret while the answer streams in, and a collapsible panel that shows the model's thinking separately from the answer, in a fixed-height window that scrolls as the thinking grows.
 
 There is no configuration screen and no model picker. The origin URL, the model id, the API key, the sampling parameters, and the default reasoning effort all live in `src/config.ts`, which is the single source of truth. Only two things stay adjustable at runtime: the theme and the reasoning effort.
 
@@ -32,7 +32,7 @@ Everything in this repository is static: the built output is plain HTML, CSS, an
 | Area | Capability |
 |---|---|
 | Streaming | Server-Sent Events with a blinking typing caret; output is buffered to about twelve flushes per second so long answers stay smooth |
-| Reasoning | `reasoning_content` is rendered in its own collapsible panel, separate from the answer body, with a readout of how many seconds the model spent thinking |
+| Reasoning | `reasoning_content` is rendered in its own panel, separate from the answer body: a fixed-height window in which the thinking scrolls up as it streams, its top edge softened instead of cut off, with a readout of how many seconds the model spent thinking |
 | Truncation | A cut-off answer says so: the message carries a notice telling a token-budget cut, a dropped connection, and an upstream filter apart |
 | Reasoning effort | Five levels: off, none, low, high, max. Picked from the chip at the bottom-left of the composer and sent as `reasoning_effort`; the default is `low` |
 | Context | Full multi-turn history is sent back with every request |

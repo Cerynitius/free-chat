@@ -490,21 +490,113 @@
 
 /* ── 思考过程面板 ───────────────────────────────────────────── */
 .reasoning {
+  /* 视窗高度上限：8 行（13px × 1.6 × 8）或视口的 30%，取小的那个 */
+  --reasoning-cap: min(30vh, 168px);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface-2);
   overflow: hidden;
 }
 
-.reasoning__body {
+/* 视窗外壳：展开/折叠用 max-height 过渡 200ms，避免布局跳动。
+   flex + justify-end ⇒ 视窗从底部往上长，滚出去的是最上面那几行。 */
+.reasoning__viewport {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 200ms var(--ease-out-expo),
+    opacity 160ms ease-out;
+}
+
+.reasoning__viewport[data-open='true'] {
+  max-height: var(--reasoning-cap);
+  opacity: 1;
+}
+
+/* 顶部渐隐：把硬切的那条线柔化掉（高级感主要来自这一步） */
+.reasoning__viewport[data-fade='on'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+}
+
+/* 滚动层：内容在里面往上滚 */
+.reasoning__scroll {
+  flex: 0 0 auto;
+  max-height: var(--reasoning-cap);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none; /* 别让浏览器的滚动锚定跟我们抢位置 */
   padding: 10px 12px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--color-muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 60vh;
-  overflow-y: auto;
+}
+
+/* 「回到最新」：右下角浮出来 */
+.reasoning__jump {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 4px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: color 0.15s var(--ease-out-expo);
+}
+
+.reasoning__jump:hover {
+  color: var(--color-ink);
+}
+
+/* 思考中：正文末尾一根闪烁的竖线 */
+.reasoning__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-muted);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+/* 思考中：标题上的呼吸光点 */
+.reasoning__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-ink);
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+/* 思考完：光点变成勾 */
+.reasoning__check {
+  color: var(--color-green-ink);
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ── 打字光标 ───────────────────────────────────────────────── */

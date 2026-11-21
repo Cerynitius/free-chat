@@ -60,7 +60,8 @@ export function MessageItem({
         <div className="mb-3">
           <ReasoningPanel
             text={message.reasoning}
-            streaming={streaming}
+            /* 正文一开始，思考就算结束 —— 面板这时该收成一行摘要 */
+            thinking={streaming && !message.content}
             elapsedMs={message.reasoningMs}
           />
         </div>
