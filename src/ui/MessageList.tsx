@@ -140,7 +140,7 @@ export function MessageList({ conversation, onEdit }: Props): React.ReactElement
         /* 别让浏览器的滚动锚定跟我们抢位置 —— 那是自动跟随的头号对头 */
         style={{ overflowAnchor: 'none' }}
       >
-        <div ref={contentRef} className="mx-auto flex max-w-3xl flex-col gap-7">
+        <div ref={contentRef} className="msg-list mx-auto flex max-w-3xl flex-col gap-7">
           {messages.map((m) => (
             <MessageItem
               key={m.id}

@@ -187,7 +187,7 @@ export function SettingsDialog(): React.ReactElement | null {
         <div className="dialog__body">
           <section>
             <h3 className="settings-h">外观</h3>
-            <Row title="界面风格" hint={settings.uiStyle === 'web' ? '暖色纸面，衬线正文' : '等宽字体，命令行式排版'}>
+            <Row title="界面风格" hint={settings.uiStyle === 'web' ? '暖色纸面，居中对话' : '等宽字体，命令行式排版'}>
               <Segmented<UiStyle>
                 label="界面风格"
                 value={settings.uiStyle}

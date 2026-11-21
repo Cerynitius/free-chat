@@ -18,7 +18,7 @@ export function Markdown({ content }: { content: string }): React.ReactElement {
         seg.kind === 'code' ? (
           <CodeBlock key={i} code={seg.code} lang={seg.lang} />
         ) : (
-          <div key={i} dangerouslySetInnerHTML={{ __html: seg.html }} />
+          <div key={i} className="prose-seg" dangerouslySetInnerHTML={{ __html: seg.html }} />
         ),
       )}
     </div>

@@ -135,7 +135,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
     return (
       <div
         key={c.id}
-        className="group flex items-center"
+        className="sidebar__item group flex items-center"
         onContextMenu={(e) => {
           // 右键呼出菜单 —— 重命名 / 置顶 / 删除都在里面
           e.preventDefault()
@@ -179,7 +179,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
           </button>
         )}
 
-        <span className="mr-0.5 shrink-0 font-mono text-[10px] text-faint">
+        <span className="sidebar__time mr-0.5 shrink-0 font-mono text-[10px] text-faint">
           {formatTime(c.updatedAt)}
         </span>
 
@@ -219,10 +219,12 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
       >
         {/* 里面的内容宽度锁死 —— 侧边栏收起时是「宽度归零」，不是「内容挤扁」 */}
         <div className="flex h-full w-[280px] shrink-0 flex-col lg:w-[260px]">
-          <div className="border-b border-line px-3 py-3">
+          <div className="sidebar__head border-b border-line px-3 py-3">
             <div className="sidebar__brand mb-3 px-1 font-serif text-[15px] tracking-[-0.01em] text-ink">Free Chat</div>
-            <button type="button" className="btn btn-primary w-full" onClick={onNew}>
-              <Plus size={15} weight="bold" />
+            <button type="button" className="sidebar__new btn btn-primary w-full" onClick={onNew}>
+              <span className="sidebar__new-icon">
+                <Plus size={15} weight="bold" />
+              </span>
               新对话
             </button>
             <label className="sidebar-search mt-2">
@@ -265,7 +267,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
           >
             {hits && (
               <div>
-                <div className="px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
+                <div className="sidebar__group-label px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
                   {hits.length ? `找到 ${hits.length} 段会话` : '没有找到'}
                 </div>
                 {hits.map((h) => (
@@ -309,7 +311,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
 
             {!hits && pinned.length > 0 && (
               <div className="mb-4 last:mb-0">
-                <div className="px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
+                <div className="sidebar__group-label px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
                   已置顶
                 </div>
                 {pinned.map(renderRow)}
@@ -318,7 +320,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
 
             {!hits && groups.map((group) => (
               <div key={group.name} className="mb-4 last:mb-0">
-                <div className="px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
+                <div className="sidebar__group-label px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] text-faint">
                   {group.name}
                 </div>
 
@@ -327,7 +329,7 @@ export function Sidebar({ open, onClose }: Props): React.ReactElement {
             ))}
           </nav>
 
-          <div className="flex items-center gap-1 border-t border-line px-3 py-2">
+          <div className="sidebar__foot flex items-center gap-1 border-t border-line px-3 py-2">
             <button
               type="button"
               className="btn btn-ghost h-8 gap-1.5 px-2 text-[12.5px] text-muted hover:text-ink"

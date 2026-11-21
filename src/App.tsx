@@ -7,7 +7,7 @@ import { loadDraft, saveDraft } from '@/lib/storage'
 import { Composer } from '@/ui/Composer'
 import { SettingsDialog } from '@/ui/SettingsDialog'
 import { useGlobalShortcuts } from '@/ui/shortcuts'
-import { EmptyState } from '@/ui/EmptyState'
+import { EmptyState, Starters } from '@/ui/EmptyState'
 import { MessageList } from '@/ui/MessageList'
 import { Sidebar } from '@/ui/Sidebar'
 import { Toast } from '@/ui/Toast'
@@ -215,7 +215,8 @@ export function App(): React.ReactElement {
 
           {/* 终端风格才显示：像终端窗口的标题栏 */}
           <div className="topbar__title min-w-0 flex-1 truncate">
-            free-chat <span className="term-dim">—</span> {conversation?.title || '新会话'}
+            <span className="topbar__prefix">free-chat <span className="term-dim">—</span> </span>
+            {conversation?.title || '新会话'}
           </div>
         </div>
 
@@ -229,6 +230,20 @@ export function App(): React.ReactElement {
 
         <Composer
           value={input}
+          starters={
+            messages.length === 0 && settings.uiStyle !== 'terminal' ? (
+              <Starters
+                onPick={(t) => {
+                  setInput(t)
+                  requestAnimationFrame(() => {
+                    const el = document.getElementById('composer-input') as HTMLTextAreaElement | null
+                    el?.focus()
+                    el?.setSelectionRange(t.length, t.length)
+                  })
+                }}
+              />
+            ) : null
+          }
           onChange={setInput}
           onSend={onSend}
           onStop={stopGeneration}

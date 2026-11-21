@@ -142,7 +142,7 @@ export interface Conversation {
  */
 export type FontSize = 'sm' | 'md' | 'lg'
 
-/** 界面风格：网页对话（暖色纸面、衬线正文）或终端（等宽、命令行式） */
+/** 界面风格：网页对话（暖色纸面、居中对话）或终端（等宽、命令行式） */
 export type UiStyle = 'web' | 'terminal'
 
 /** 发送键：Enter 发送（Shift+Enter 换行），或 Ctrl/⌘+Enter 发送（Enter 换行） */

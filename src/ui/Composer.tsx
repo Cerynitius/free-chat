@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Paperclip, PaperPlaneRight, PencilSimple, Stop, Wrench, X } from '@phosphor-icons/react'
+import { ArrowUp, Paperclip, PencilSimple, Stop, Wrench, X } from '@phosphor-icons/react'
+import { useApp } from '@/state/store'
 import { EffortPicker } from './EffortPicker'
 import { formatSize, type Attachment } from '@/lib/attachments'
 import type { SendKey } from '@/state/types'
@@ -25,6 +26,8 @@ interface Props {
   onToolsChange: (v: boolean) => void
   /** Enter 发送，还是 Ctrl/⌘+Enter 发送 */
   sendKey: SendKey
+  /** 新会话时挂在输入框下面的起手式（网页风格） */
+  starters?: React.ReactNode
 }
 
 export function Composer({
@@ -43,10 +46,12 @@ export function Composer({
   toolsEnabled,
   onToolsChange,
   sendKey,
+  starters,
 }: Props): React.ReactElement {
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [focused, setFocused] = useState(false)
+  const terminal = useApp((s) => s.settings.uiStyle) === 'terminal'
 
   // 自增高
   useEffect(() => {
@@ -118,11 +123,9 @@ export function Composer({
                 ? '正在生成…'
                 : editing
                   ? '改完直接发 —— 这一轮会被替换'
-                  : coarse
-                    ? '说点什么…'
-                    : sendKey === 'mod-enter'
-                    ? `说点什么…（${modKey}Enter 发送，Enter 换行）`
-                    : '说点什么…（Enter 发送，Shift+Enter 换行）'
+                  : terminal
+                    ? '试试「解释一下这段代码」'
+                    : '有什么可以帮你？'
             }
             className="max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[15px] leading-[1.7] text-ink outline-none placeholder:text-faint"
             aria-label="输入消息"
@@ -153,7 +156,7 @@ export function Composer({
           )}
 
           <div className="composer__bar flex items-center justify-between gap-2 px-2 pb-2">
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="composer__tools flex min-w-0 items-center gap-1.5">
               <input
                 ref={fileRef}
                 type="file"
@@ -190,43 +193,46 @@ export function Composer({
                 工具 · {toolsEnabled ? '开' : '关'}
               </button>
             </div>
+            {/* 终端风格才显示：按键提示，和开关在同一行 */}
+            <div className="composer__hint">
+              {streaming ? (
+                <span>
+                  <span className="term-ink">esc</span> 停止
+                </span>
+              ) : sendKey === 'mod-enter' ? (
+                <span>
+                  <span className="term-ink">{modKey}⏎</span> 发送 · <span className="term-ink">⏎</span> 换行
+                </span>
+              ) : (
+                <span>
+                  <span className="term-ink">⏎</span> 发送 · <span className="term-ink">⇧⏎</span> 换行
+                </span>
+              )}
+              <span className="composer__hint-more">
+                {' '}· <span className="term-ink">/</span> 聚焦 · <span className="term-ink">{modKey}K</span> 搜索
+              </span>
+            </div>
             {streaming ? (
-              <button type="button" className="btn btn-icon" onClick={onStop} aria-label="停止生成">
+              <button type="button" className="btn btn-icon composer__send" onClick={onStop} aria-label="停止生成">
                 <Stop size={16} weight="fill" />
               </button>
             ) : (
               <button
                 type="button"
-                className="btn btn-primary btn-icon"
+                className="btn btn-primary btn-icon composer__send"
                 onClick={onSend}
                 disabled={!value.trim()}
                 aria-label={editing ? '改写并发送' : '发送'}
                 title={editing ? '改写并发送' : '发送'}
               >
-                <PaperPlaneRight size={16} weight="fill" />
+                <ArrowUp size={16} weight="bold" />
               </button>
             )}
           </div>
         </div>
-        {/* 终端风格才显示：输入框下面那一行按键提示 */}
-        <div className="composer__hint">
-          {streaming ? (
-            <span>
-              <span className="term-ink">esc</span> 停止生成
-            </span>
-          ) : sendKey === 'mod-enter' ? (
-            <span>
-              <span className="term-ink">{modKey}⏎</span> 发送 · <span className="term-ink">⏎</span> 换行
-            </span>
-          ) : (
-            <span>
-              <span className="term-ink">⏎</span> 发送 · <span className="term-ink">⇧⏎</span> 换行
-            </span>
-          )}
-          <span className="ml-auto">
-            <span className="term-ink">/</span> 聚焦 · <span className="term-ink">{modKey}K</span> 搜索
-          </span>
-        </div>
+        {/* 网页风格才显示：输入框下面一行小字 */}
+        {starters}
+        <div className="composer__note">Free Chat 也会出错，重要的事请自己核对。</div>
       </div>
     </div>
   )
