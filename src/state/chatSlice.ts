@@ -43,7 +43,7 @@ function toOutgoing(messages: Message[]): OutgoingMessage[] {
       if (!m.content.trim()) continue
       const names = m.attachments ?? []
       const note = names.length
-        ? `\n\n（这条消息带了附件：${names.join('、')}。用 read_file 读文档、ocr 认图片，path 就填这些文件名。）`
+        ? `\n\n（这条消息带了附件：${names.join('、')}。用 read_file 读文档、ocr 认图片，path 填括号前面的文件名。）`
         : ''
       out.push({ role: 'user', content: m.content + note })
       continue

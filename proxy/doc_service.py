@@ -41,6 +41,9 @@ PORT = int(os.environ.get("DOC_PORT", "8788"))
 # 扫描版 PDF 最多认几页 —— 一页一秒，超了就没意思了
 MAX_PDF_PAGES = 20
 
+# 收多大的文件 —— 前端二进制附件上限是 25MB，这里留一点余量
+MAX_BODY_BYTES = 30 * 1024 * 1024
+
 # 单次返回多少字（客户端可以指定 offset/limit 翻页）
 DEFAULT_LIMIT = 30_000
 HARD_LIMIT = 200_000
@@ -64,6 +67,35 @@ def _log(message: str) -> None:
 # ── 认字 ───────────────────────────────────────────────────
 
 
+def _rapidocr_params() -> dict:
+    """新版 RapidOCR 的参数。OCR_CUDA=1 时走显卡，显存封顶 OCR_GPU_MEM_MB（默认 3072）。
+
+    arena 用 kSameAsRequested：要多少拿多少，不按 2 的幂往上翻；
+    卷积算法用 HEURISTIC：每张图尺寸都不同，EXHAUSTIVE 会对每个新尺寸重新试一遍。
+    选哪张卡用 CUDA_VISIBLE_DEVICES，这里固定 device_id=0。
+    """
+    if os.environ.get("OCR_CUDA", "") != "1":
+        return {}
+    limit = int(os.environ.get("OCR_GPU_MEM_MB", "3072")) * 1024 * 1024
+    try:
+        # pip 装的 CUDA/cuDNN 库在 site-packages/nvidia 下，不在动态库搜索路径上，先手动加载
+        import onnxruntime
+
+        onnxruntime.preload_dlls()
+    except Exception as err:  # noqa: BLE001
+        _log(f"预加载 CUDA 库失败，可能退回 CPU：{type(err).__name__}: {err}")
+    return {
+        "EngineConfig.onnxruntime.use_cuda": True,
+        "EngineConfig.onnxruntime.cuda_ep_cfg": {
+            "device_id": 0,
+            "gpu_mem_limit": limit,
+            "arena_extend_strategy": "kSameAsRequested",
+            "cudnn_conv_algo_search": "HEURISTIC",
+            "do_copy_in_default_stream": True,
+        },
+    }
+
+
 def get_ocr_engine():
     """初始化 OCR 引擎。两个包名都试 —— 新旧两代 RapidOCR 的调用方式不一样。"""
     global _ocr_engine, _ocr_engine_kind
@@ -81,7 +113,7 @@ def get_ocr_engine():
             try:
                 from rapidocr import RapidOCR
 
-                _ocr_engine = RapidOCR()
+                _ocr_engine = RapidOCR(params=_rapidocr_params())
                 _ocr_engine_kind = "rapidocr"
             except ImportError as err:
                 raise RuntimeError(
@@ -233,6 +265,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
         length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_BODY_BYTES:
+            self._reply(413, {"ok": False, "error": f"文件太大（上限 {MAX_BODY_BYTES // 1024 // 1024}MB）"})
+            return
         data = self.rfile.read(length) if length else b""
 
         try:

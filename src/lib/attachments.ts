@@ -15,7 +15,10 @@ export type AttachmentKind = 'text' | 'document' | 'image'
 
 export interface Attachment {
   id: string
+  /** 给模型和工具用的名字：内容哈希 + 扩展名，比如 3f9a1c2e.png */
   name: string
+  /** 上传时的原文件名，只给人看 */
+  original: string
   size: number
   kind: AttachmentKind
   mime: string
@@ -55,12 +58,39 @@ export function classify(name: string, mime: string): AttachmentKind {
   return 'document'
 }
 
+/** 扩展名：只留小写字母数字，没有就不带 */
+function extOf(name: string): string {
+  const m = /\.([A-Za-z0-9]{1,8})$/.exec(name.trim())
+  return m ? `.${m[1].toLowerCase()}` : ''
+}
+
+/**
+ * 内容哈希（SHA-256 前 8 位十六进制）。
+ *
+ * 原文件名里常有模型抄不对的字符（Mac 截图的 U+202F 空格、emoji、全角符号），
+ * 所以工具一律用哈希名。没有 crypto.subtle（非 https 页面）时退回随机串。
+ */
+async function hashName(file: File): Promise<string> {
+  let hex = ''
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+    hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 8)
+  } catch {
+    hex = Math.random().toString(16).slice(2, 10).padEnd(8, '0')
+  }
+  let name = hex + extOf(file.name)
+  // 同一个文件传两次也不撞名
+  for (let i = 2; [...items.values()].some((a) => a.name === name); i++) name = `${hex}-${i}${extOf(file.name)}`
+  return name
+}
+
 /** 读一个文件，认出来是哪一类 */
 export async function readAttachment(file: File): Promise<Attachment> {
   const kind = classify(file.name, file.type)
   const attachment: Attachment = {
     id: uid(),
-    name: file.name,
+    name: await hashName(file),
+    original: file.name,
     size: file.size,
     kind,
     mime: file.type || '',
@@ -125,15 +155,24 @@ function normName(name: string): string {
 }
 
 export function findAttachment(name: string): Attachment | undefined {
-  const wanted = normName(name)
+  // 模型偶尔把「（原名…）」一起抄过来
+  const wanted = normName(name.split(/[（(]原名/)[0])
   if (!wanted) return undefined
-  const all = listAttachments().map((a) => ({ a, n: normName(a.name) }))
-  const exact = all.find((x) => x.n === wanted)
-  if (exact) return exact.a
   const base = wanted.split(/[\\/]/).pop() ?? wanted
-  const loose = all.find((x) => x.n === base)
-  if (loose) return loose.a
-  return all.find((x) => x.n.includes(base))?.a
+  const all = listAttachments()
+  // 先认哈希名，再认原文件名
+  for (const key of [(a: Attachment) => a.name, (a: Attachment) => a.original]) {
+    const named = all.map((a) => ({ a, n: normName(key(a)) }))
+    const hit =
+      named.find((x) => x.n === wanted) ?? named.find((x) => x.n === base) ?? named.find((x) => x.n.includes(base))
+    if (hit) return hit.a
+  }
+  return undefined
+}
+
+/** 捎给模型的附件说明：哈希名在前，原名在括号里 */
+export function describeAttachment(a: Attachment): string {
+  return a.original && a.original !== a.name ? `${a.name}（原名「${a.original}」）` : a.name
 }
 
 /** 人话版的体积 */

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, SidebarSimple } from '@phosphor-icons/react'
 import { useApp } from '@/state/store'
 import { applyTheme } from '@/lib/theme'
-import { addFile, removeAttachment, type Attachment } from '@/lib/attachments'
+import { addFile, describeAttachment, removeAttachment, type Attachment } from '@/lib/attachments'
 import { loadDraft, saveDraft } from '@/lib/storage'
 import { Composer } from '@/ui/Composer'
 import { SettingsDialog } from '@/ui/SettingsDialog'
@@ -119,7 +119,7 @@ export function App(): React.ReactElement {
       if (convId) saveDraft(convId, '')
     }
     // 附件名跟着消息走 —— 模型得知道有哪些文件可读
-    const names = attachments.map((a) => a.name)
+    const names = attachments.map(describeAttachment)
     if (editing) {
       const id = editing.id
       setEditing(null)

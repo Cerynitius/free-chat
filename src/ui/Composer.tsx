@@ -145,14 +145,15 @@ export function Composer({
                 <span
                   key={a.id}
                   className="inline-flex max-w-[220px] items-center gap-1 rounded-xs border border-line bg-surface-2 py-0.5 pl-2 pr-1 text-[11px] text-muted"
+                  title={`${a.original}\n模型看到的名字：${a.name}`}
                 >
-                  <span className="min-w-0 truncate">{a.name}</span>
+                  <span className="min-w-0 truncate">{a.original}</span>
                   <span className="shrink-0 text-faint">{formatSize(a.size)}</span>
                   <button
                     type="button"
                     className="shrink-0 rounded-xs p-0.5 text-faint transition-colors hover:text-ink"
                     onClick={() => onRemoveAttachment(a.id)}
-                    aria-label={`去掉 ${a.name}`}
+                    aria-label={`去掉 ${a.original}`}
                     title="去掉"
                   >
                     <X size={10} weight="bold" />
